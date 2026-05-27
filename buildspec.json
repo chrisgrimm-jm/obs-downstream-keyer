@@ -33,7 +33,7 @@
     },
     "platformConfig": {
         "macos": {
-            "bundleId": "com.example.plugintemplate-for-obs"
+            "bundleId": "com.jomboymedia.obs-downstream-keyer"
         }
     },
     "name": "obs-downstream-keyer",
@@ -41,5 +41,5 @@
     "version": "1.0.0",
     "author": "Jomboy Media",
     "website": "https://jomboymedia.com",
-    "email": ""
+    "email": "chrisgrimm-jm@users.noreply.github.com"
 }
