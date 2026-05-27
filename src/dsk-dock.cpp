@@ -177,9 +177,12 @@ void DskDock::onToggleClicked(const QString &sourceName)
 
 void DskDock::onTransitionClicked(const QString &sourceName)
 {
-    DskItemSettings dlg(sourceName, this);
-    dlg.exec();
-    DskManager::instance().saveSettings();
+    auto *dlg = new DskItemSettings(sourceName, this);
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dlg, &QDialog::accepted, this, []() {
+        DskManager::instance().saveSettings();
+    });
+    dlg->show();
 }
 
 void DskDock::onSettingsClicked()
