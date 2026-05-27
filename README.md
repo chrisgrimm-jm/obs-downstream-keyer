@@ -50,12 +50,18 @@ Each item is completely independent. You can have Sponsor A live during segment 
 ## Features
 
 ### Dock Controls
-Each source in your DSK scene gets its own toggle button in the dock. Buttons are green when active, gray when off.
+Each source in your DSK scene gets its own toggle button in the dock. Buttons are green when active and gray when off.
+
+### Timer Progress Bar
+When auto-hide is enabled on an item, the toggle button doubles as a visual countdown. The button starts fully green and the color drains left to right over the configured duration. When time runs out the button goes fully gray and the item is hidden automatically.
 
 ### Per-Item Transitions
 Click the **T** button next to any item to configure show/hide transitions. All built-in OBS transitions are supported, plus any transition plugins you have installed — including **obs-move** for fly-ins, zooms, slides, and other motion effects.
 
 When using obs-move, click **Configure…** after selecting it to set direction, easing, and distance using OBS's native properties panel.
+
+### Auto-Hide Timer
+In the **T** settings dialog, enable **Auto-hide** and set a duration in seconds. When the item is activated it will automatically deactivate after that time. The dock button shows a live countdown bar while it's running. Manually toggling the item off cancels the timer.
 
 ### Hotkeys
 Every item in your DSK scene automatically gets a hotkey registered under **OBS Settings → Hotkeys** — look for entries starting with `DSK: Toggle`.
