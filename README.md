@@ -1,59 +1,106 @@
-# OBS Plugin Template
+# OBS Downstream Keyer
 
-## Introduction
+A plugin for OBS Studio that adds a broadcast-style downstream keyer (DSK) — a persistent overlay layer that sits on top of all your scenes and lets you punch individual graphics in and out independently during a live show.
 
-The plugin template is meant to be used as a starting point for OBS Studio plugin development. It includes:
+Built by [Jomboy Media](https://jomboymedia.com).
 
-* Boilerplate plugin source code
-* A CMake project file
-* GitHub Actions workflows and repository actions
+---
 
-## Supported Build Environments
+## What It Does
 
-| Platform  | Tool   |
-|-----------|--------|
-| Windows   | Visual Studio 17 2022 |
-| macOS     | XCode 16.0 |
-| Windows, macOS  | CMake 3.30.5 |
-| Ubuntu 24.04 | CMake 3.28.3 |
-| Ubuntu 24.04 | `ninja-build` |
-| Ubuntu 24.04 | `pkg-config`
-| Ubuntu 24.04 | `build-essential` |
+You create one OBS scene that holds all your potential overlay graphics — sponsor logos, lower thirds, bugs, copyright notices, whatever you need. The plugin adds that scene as a layer on top of every other scene in your collection, then gives you a dock panel with a toggle button for each item.
 
-## Quick Start
+Each item is completely independent. You can have Sponsor A live during segment one, bring in a lower third mid-conversation, then swap to Sponsor B later — all without touching your main scene.
 
-An absolute bare-bones [Quick Start Guide](https://github.com/obsproject/obs-plugintemplate/wiki/Quick-Start-Guide) is available in the wiki.
+---
 
-## Documentation
+## Installation
 
-All documentation can be found in the [Plugin Template Wiki](https://github.com/obsproject/obs-plugintemplate/wiki).
+### Windows
+1. Download `obs-downstream-keyer-windows-x64.zip` from the [latest release](../../releases/latest)
+2. Extract and copy `obs-downstream-keyer.dll` to `C:\Program Files\obs-studio\obs-plugins\64bit\`
+3. Restart OBS
 
-Suggested reading to get up and running:
+### macOS
+1. Download `obs-downstream-keyer-macos-universal.tar.xz` from the [latest release](../../releases/latest)
+2. Extract and copy the `.plugin` bundle to `~/Library/Application Support/obs-studio/plugins/`
+3. Restart OBS
 
-* [Getting started](https://github.com/obsproject/obs-plugintemplate/wiki/Getting-Started)
-* [Build system requirements](https://github.com/obsproject/obs-plugintemplate/wiki/Build-System-Requirements)
-* [Build system options](https://github.com/obsproject/obs-plugintemplate/wiki/CMake-Build-System-Options)
+### Linux
+1. Download the `.deb` from the [latest release](../../releases/latest)
+2. Run `sudo dpkg -i obs-downstream-keyer-*.deb`
+3. Restart OBS
 
-## GitHub Actions & CI
+---
 
-Default GitHub Actions workflows are available for the following repository actions:
+## Setup
 
-* `push`: Run for commits or tags pushed to `master` or `main` branches.
-* `pr-pull`: Run when a Pull Request has been pushed or synchronized.
-* `dispatch`: Run when triggered by the workflow dispatch in GitHub's user interface.
-* `build-project`: Builds the actual project and is triggered by other workflows.
-* `check-format`: Checks CMake and plugin source code formatting and is triggered by other workflows.
+1. **Create your DSK scene** — Make a new scene in OBS (e.g. `DSK Layer`) and add all the sources you might want to use as overlays. They'll start hidden by default.
 
-The workflows make use of GitHub repository actions (contained in `.github/actions`) and build scripts (contained in `.github/scripts`) which are not needed for local development, but might need to be adjusted if additional/different steps are required to build the plugin.
+2. **Open the dock** — Go to **Docks → Downstream Keyers**.
 
-### Retrieving build artifacts
+3. **Configure the plugin** — Click the **Settings** button in the dock, select your DSK scene from the dropdown, and click **Add DSK scene to all scenes**. This wires the overlay into your entire scene collection.
 
-Successful builds on GitHub Actions will produce build artifacts that can be downloaded for testing. These artifacts are commonly simple archives and will not contain package installers or installation programs.
+4. **Go live** — Toggle items on and off from the dock during your show. Each button is independent.
 
-### Building a Release
+> If you add new scenes after initial setup, click **Add DSK scene to all scenes** again to include them.
 
-To create a release, an appropriately named tag needs to be pushed to the `main`/`master` branch using semantic versioning (e.g., `12.3.4`, `23.4.5-beta2`). A draft release will be created on the associated repository with generated installer packages or installation programs attached as release artifacts.
+---
 
-## Signing and Notarizing on macOS
+## Features
 
-Basic concepts of codesigning and notarization on macOS are explained in the correspodning [Wiki article](https://github.com/obsproject/obs-plugintemplate/wiki/Codesigning-On-macOS) which has a specific section for the [GitHub Actions setup](https://github.com/obsproject/obs-plugintemplate/wiki/Codesigning-On-macOS#setting-up-code-signing-for-github-actions).
+### Dock Controls
+Each source in your DSK scene gets its own toggle button in the dock. Buttons are green when active, gray when off.
+
+### Per-Item Transitions
+Click the **T** button next to any item to configure show/hide transitions. All built-in OBS transitions are supported, plus any transition plugins you have installed — including **obs-move** for fly-ins, zooms, slides, and other motion effects.
+
+When using obs-move, click **Configure…** after selecting it to set direction, easing, and distance using OBS's native properties panel.
+
+### Hotkeys
+Every item in your DSK scene automatically gets a hotkey registered under **OBS Settings → Hotkeys** — look for entries starting with `DSK: Toggle`.
+
+### Bitfocus Companion Integration
+The plugin runs a local HTTP server (default port `4488`) for integration with [Bitfocus Companion](https://bitfocus.io/companion).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/status` | Returns all items and their current state |
+| `GET` | `/api/item/:name` | Returns state of a single item |
+| `POST` | `/api/item/:name/activate` | Shows the item |
+| `POST` | `/api/item/:name/deactivate` | Hides the item |
+| `POST` | `/api/item/:name/toggle` | Toggles the item |
+
+Source names in the URL must be URL-encoded. The port can be changed in Settings.
+
+---
+
+## Building From Source
+
+Requires CMake 3.28+, a C++17 compiler, and an internet connection (the build system auto-downloads OBS and Qt dependencies).
+
+**Windows**
+```
+cmake --preset windows-x64
+cmake --build --preset windows-x64
+```
+
+**macOS**
+```
+cmake --preset macos
+cmake --build --preset macos
+```
+
+**Linux**
+```
+cmake --preset ubuntu-x86_64
+cmake --build --preset ubuntu-x86_64
+```
+
+---
+
+## Requirements
+
+- OBS Studio 28.0 or later
+- Windows 10+, macOS 12+, or Ubuntu 22.04+
+- [obs-move](https://obsproject.com/forum/resources/move-transition.913/) (optional, for motion transitions)
