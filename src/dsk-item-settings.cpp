@@ -69,6 +69,7 @@ DskTransitionConfig DskItemSettings::buildConfig() const
     cfg.showDuration = (uint32_t)m_showDurSpin->value();
     cfg.hideType     = m_hideTypeCb->currentData().toString().toStdString();
     cfg.hideDuration = (uint32_t)m_hideDurSpin->value();
+    cfg.autoDuration = (m_autoCheck->isChecked()) ? (uint32_t)m_autoDurSpin->value() : 0;
 
     if (m_showTransSrc) {
         obs_data_t *s = obs_source_get_settings(m_showTransSrc);
@@ -102,6 +103,7 @@ void DskItemSettings::buildUI()
     QString     hideType     = cfg ? QString::fromStdString(cfg->hideType)     : "";
     int         hideDur      = cfg ? (int)cfg->hideDuration                    : 300;
     std::string hideSettings = cfg ? cfg->hideSettings                         : "";
+    int         autoDur      = cfg ? (int)cfg->autoDuration                    : 0;
 
     // Create temp sources with any previously saved settings
     if (!showType.isEmpty()) m_showTransSrc = createTempSource(showType, showSettings);
@@ -166,6 +168,28 @@ void DskItemSettings::buildUI()
     hideForm->addRow("Duration:", m_hideDurSpin);
 
     root->addWidget(hideGroup);
+
+    // ── Auto-hide ─────────────────────────────────────────────────────────────
+    auto *autoGroup = new QGroupBox("Auto-hide");
+    auto *autoForm  = new QFormLayout(autoGroup);
+
+    auto *autoRow  = new QWidget();
+    auto *autoHBox = new QHBoxLayout(autoRow);
+    autoHBox->setContentsMargins(0, 0, 0, 0);
+    m_autoCheck   = new QCheckBox("Enable");
+    m_autoDurSpin = new QSpinBox();
+    m_autoDurSpin->setRange(1, 3600);
+    m_autoDurSpin->setSuffix(" sec");
+    m_autoDurSpin->setValue(autoDur > 0 ? autoDur : 10);
+    m_autoDurSpin->setEnabled(autoDur > 0);
+    m_autoCheck->setChecked(autoDur > 0);
+    autoHBox->addWidget(m_autoCheck);
+    autoHBox->addWidget(m_autoDurSpin, 1);
+    autoForm->addRow("Duration:", autoRow);
+
+    connect(m_autoCheck, &QCheckBox::toggled, m_autoDurSpin, &QSpinBox::setEnabled);
+
+    root->addWidget(autoGroup);
 
     // ── Buttons ───────────────────────────────────────────────────────────────
     auto *btnBox  = new QDialogButtonBox();

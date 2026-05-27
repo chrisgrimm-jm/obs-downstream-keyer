@@ -6,6 +6,7 @@
 #include <QDialog>
 #include <QComboBox>
 #include <QSpinBox>
+#include <QCheckBox>
 #include <QPushButton>
 #include <QString>
 #include <string>
@@ -40,6 +41,9 @@ private:
     QComboBox   *m_hideTypeCb    = nullptr;
     QSpinBox    *m_hideDurSpin   = nullptr;
     QPushButton *m_hideConfigBtn = nullptr;
+
+    QCheckBox   *m_autoCheck     = nullptr;
+    QSpinBox    *m_autoDurSpin   = nullptr;
 
     obs_source_t *m_showTransSrc = nullptr;
     obs_source_t *m_hideTransSrc = nullptr;

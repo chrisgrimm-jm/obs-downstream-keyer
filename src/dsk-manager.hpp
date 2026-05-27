@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <vector>
 #include <functional>
+#include <cstdint>
 
 // Per-source show/hide transition config.
 // When set, the manager applies these to the scene item so that toggling
@@ -16,6 +17,7 @@ struct DskTransitionConfig {
     std::string hideType;
     uint32_t    hideDuration = 300;
     std::string hideSettings;  // JSON blob of transition source settings
+    uint32_t    autoDuration = 0; // seconds before auto-hide (0 = disabled)
 };
 
 class DskManager {
@@ -95,6 +97,9 @@ private:
     int         m_httpPort  = 4488;
 
     std::string m_dockState;
+
+    // Per-source auto-hide timer sequence numbers (incremented to cancel pending timers)
+    std::unordered_map<std::string, uint64_t> m_timerSeq;
 
     std::unordered_map<std::string, DskTransitionConfig> m_transitions;
     std::vector<HotkeyEntry>                             m_hotkeys;

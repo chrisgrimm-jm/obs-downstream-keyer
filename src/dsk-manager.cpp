@@ -4,6 +4,9 @@
 #include <util/platform.h>
 #include <callback/signal.h>
 
+#include <QCoreApplication>
+#include <QTimer>
+
 #include <cstring>
 
 // ── Singleton ─────────────────────────────────────────────────────────────────
@@ -110,10 +113,23 @@ void DskManager::activate(const std::string &sourceName)
     if (!item) return;
     obs_sceneitem_set_visible(item, true);
     if (m_stateCb) m_stateCb(sourceName, true);
+
+    // Schedule auto-hide if configured
+    auto it = m_transitions.find(sourceName);
+    if (it != m_transitions.end() && it->second.autoDuration > 0) {
+        uint64_t seq = ++m_timerSeq[sourceName];
+        uint32_t ms  = it->second.autoDuration * 1000;
+        QTimer::singleShot(ms, QCoreApplication::instance(),
+            [this, sourceName, seq]() {
+                if (m_timerSeq[sourceName] == seq)
+                    deactivate(sourceName);
+            });
+    }
 }
 
 void DskManager::deactivate(const std::string &sourceName)
 {
+    ++m_timerSeq[sourceName]; // invalidate any pending auto-hide timer
     obs_sceneitem_t *item = findItem(sourceName);
     if (!item) return;
     obs_sceneitem_set_visible(item, false);
@@ -122,11 +138,10 @@ void DskManager::deactivate(const std::string &sourceName)
 
 void DskManager::toggle(const std::string &sourceName)
 {
-    obs_sceneitem_t *item = findItem(sourceName);
-    if (!item) return;
-    bool next = !obs_sceneitem_visible(item);
-    obs_sceneitem_set_visible(item, next);
-    if (m_stateCb) m_stateCb(sourceName, next);
+    if (isActive(sourceName))
+        deactivate(sourceName);
+    else
+        activate(sourceName);
 }
 
 // ── Transition config ─────────────────────────────────────────────────────────
@@ -369,6 +384,7 @@ void DskManager::loadSettings()
                 cfg.hideDuration = (uint32_t)obs_data_get_int(entry, "hide_dur");
                 const char *hs = obs_data_get_string(entry, "hide_settings");
                 if (hs) cfg.hideSettings = hs;
+                cfg.autoDuration = (uint32_t)obs_data_get_int(entry, "auto_dur");
                 m_transitions[name] = cfg;
             }
             obs_data_release(entry);
@@ -424,6 +440,7 @@ void DskManager::saveSettings()
         obs_data_set_string(entry, "hide_type",     cfg.hideType.c_str());
         obs_data_set_int(entry,    "hide_dur",      cfg.hideDuration);
         obs_data_set_string(entry, "hide_settings", cfg.hideSettings.c_str());
+        obs_data_set_int(entry,    "auto_dur",      cfg.autoDuration);
         obs_data_array_push_back(items, entry);
         obs_data_release(entry);
     }
