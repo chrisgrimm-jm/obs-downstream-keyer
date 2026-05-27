@@ -50,13 +50,18 @@ Each item is completely independent. You can have Sponsor A live during segment 
 ## Features
 
 ### Dock Controls
-Each source in your DSK scene gets its own toggle button in the dock. Buttons are green when active and gray when off.
+Each source in your DSK scene gets its own toggle button in the dock. **Green always means live/on-air.** When a source is off, the button shows in its assigned color (default dark gray).
+
+Use the toggle icon in the dock header to switch between **list view** (one row per item with a T button) and **grid view** (4-column compact grid, good for large collections).
+
+### Color-Coded Buttons
+Right-click any button and choose **Set Color…** to assign a custom color for when that source is off-air. Use this to visually identify items at a glance — red for lower thirds, blue for sponsor bugs, etc. The button always turns solid green when live regardless of its assigned color. Choose **Reset to Default Color** to go back to the standard dark gray.
 
 ### Timer Progress Bar
-When auto-hide is enabled on an item, the toggle button doubles as a visual countdown. The button starts fully green and the color drains left to right over the configured duration. When time runs out the button goes fully gray and the item is hidden automatically.
+When auto-hide is enabled on an item, the toggle button doubles as a visual countdown. The button starts fully green when activated and the color drains left to right back toward the item's assigned color over the configured duration. When time runs out the item is hidden automatically.
 
 ### Per-Item Transitions
-Click the **T** button next to any item to configure show/hide transitions. All built-in OBS transitions are supported, plus any transition plugins you have installed — including **obs-move** for fly-ins, zooms, slides, and other motion effects.
+Click the **T** button next to any item (or right-click in grid view) to configure show/hide transitions. All built-in OBS transitions are supported, plus any transition plugins you have installed — including **obs-move** for fly-ins, zooms, slides, and other motion effects.
 
 When using obs-move, click **Configure…** after selecting it to set direction, easing, and distance using OBS's native properties panel.
 
@@ -78,6 +83,14 @@ The plugin runs a local HTTP server (default port `4488`) for integration with [
 | `POST` | `/api/item/:name/toggle` | Toggles the item |
 
 Source names in the URL must be URL-encoded. The port can be changed in Settings.
+
+When an item has an active auto-hide countdown, the response includes `timeRemaining` (seconds, one decimal place):
+
+```json
+{"name":"Lower Third","active":true,"timeRemaining":4.2}
+```
+
+Items without a countdown omit the field entirely.
 
 ---
 
