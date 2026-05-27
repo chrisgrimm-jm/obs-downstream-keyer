@@ -19,7 +19,6 @@ DskItemSettings::DskItemSettings(const QString &sourceName, QWidget *parent)
 {
     setWindowTitle("Transitions: " + sourceName);
     setMinimumWidth(400);
-    setWindowModality(Qt::WindowModal);
     buildUI();
 }
 
