@@ -21,8 +21,9 @@ public:
     // Grid mode: text is centered and font is smaller.
     void setGridMode(bool grid);
 
-    // Override the active (green) color. Pass an invalid QColor to reset to default.
-    void setActiveColor(const QColor &color);
+    // Set the button color used in the INACTIVE state (green is always used for active/live).
+    // Pass an invalid QColor to reset to the default dark gray.
+    void setButtonColor(const QColor &color);
 
 protected:
     void paintEvent(QPaintEvent *) override;
@@ -33,7 +34,7 @@ private:
     bool          m_active      = false;
     bool          m_gridMode    = false;
     int           m_totalMs     = 0;
-    QColor        m_activeColor = QColor(0x27, 0xae, 0x60); // default green
+    QColor        m_buttonColor = QColor(0x2c, 0x2c, 0x2c); // inactive color (default dark gray)
     QElapsedTimer m_elapsed;
     QTimer       *m_ticker      = nullptr;
 };

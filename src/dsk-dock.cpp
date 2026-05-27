@@ -123,7 +123,7 @@ void DskDock::buildListView(QVBoxLayout *layout)
         const DskTransitionConfig *cfg =
             DskManager::instance().transitionConfig(item.sourceName);
         if (cfg && !cfg->buttonColor.empty())
-            toggleBtn->setActiveColor(QColor(QString::fromStdString(cfg->buttonColor)));
+            toggleBtn->setButtonColor(QColor(QString::fromStdString(cfg->buttonColor)));
 
         connect(toggleBtn, &QPushButton::clicked, this, [this, sname]() {
             onToggleClicked(sname);
@@ -186,7 +186,7 @@ void DskDock::buildGridView(QVBoxLayout *layout)
         const DskTransitionConfig *cfg =
             DskManager::instance().transitionConfig(item.sourceName);
         if (cfg && !cfg->buttonColor.empty())
-            btn->setActiveColor(QColor(QString::fromStdString(cfg->buttonColor)));
+            btn->setButtonColor(QColor(QString::fromStdString(cfg->buttonColor)));
 
         connect(btn, &QPushButton::clicked, this, [this, sname]() {
             onToggleClicked(sname);
@@ -292,8 +292,8 @@ void DskDock::onSetColorClicked(const QString &sourceName)
 {
     std::string sname = sourceName.toStdString();
 
-    // Seed dialog with the currently saved color (or the default green)
-    QColor current(0x27, 0xae, 0x60);
+    // Seed dialog with the currently saved color (or the default dark gray)
+    QColor current(0x2c, 0x2c, 0x2c);
     const DskTransitionConfig *cfg = DskManager::instance().transitionConfig(sname);
     if (cfg && !cfg->buttonColor.empty())
         current = QColor(QString::fromStdString(cfg->buttonColor));
@@ -306,7 +306,7 @@ void DskDock::onSetColorClicked(const QString &sourceName)
 
     // Update the live button without a full refresh
     DskTimerButton *btn = findTimerButton(sourceName);
-    if (btn) btn->setActiveColor(picked);
+    if (btn) btn->setButtonColor(picked);
 }
 
 void DskDock::onSettingsClicked()

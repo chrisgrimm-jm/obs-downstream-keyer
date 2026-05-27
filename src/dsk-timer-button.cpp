@@ -34,9 +34,9 @@ void DskTimerButton::setGridMode(bool grid)
     update();
 }
 
-void DskTimerButton::setActiveColor(const QColor &color)
+void DskTimerButton::setButtonColor(const QColor &color)
 {
-    m_activeColor = color.isValid() ? color : QColor(0x27, 0xae, 0x60);
+    m_buttonColor = color.isValid() ? color : QColor(0x2c, 0x2c, 0x2c);
     update();
 }
 
@@ -59,32 +59,33 @@ void DskTimerButton::paintEvent(QPaintEvent *)
 
     QRectF r = QRectF(rect()).adjusted(1, 1, -1, -1);
 
-    QColor green = pressed ? m_activeColor.darker(115)
-                 : hovered ? m_activeColor.lighter(115)
-                           : m_activeColor;
-    QColor gray  = pressed ? QColor("#222")
-                 : hovered ? QColor("#3a3a3a")
-                           : QColor("#2c2c2c");
+    // Active = always green (on-air indicator). Inactive = user's chosen color.
+    QColor green = pressed ? QColor(0x1e, 0x84, 0x49)
+                 : hovered ? QColor(0x2e, 0xcc, 0x71)
+                           : QColor(0x27, 0xae, 0x60);
+    QColor inact = pressed ? m_buttonColor.darker(115)
+                 : hovered ? m_buttonColor.lighter(115)
+                           : m_buttonColor;
 
     // Background fill
     p.setPen(Qt::NoPen);
-    p.setBrush(m_active ? green : gray);
+    p.setBrush(m_active ? green : inact);
     p.drawRoundedRect(r, 4, 4);
 
-    // Depleted (right) portion when counting down
+    // Timer bar: inactive color grows from the left as countdown depletes
     if (m_active && m_totalMs > 0 && prog < 1.0f) {
         QPainterPath clip;
         clip.addRoundedRect(r, 4, 4);
         p.setClipPath(clip);
 
-        float grayW = r.width() * (1.0f - prog);
-        p.setBrush(gray);
-        p.drawRect(QRectF(r.left(), r.top(), grayW, r.height()));
+        float inactW = r.width() * (1.0f - prog);
+        p.setBrush(inact);
+        p.drawRect(QRectF(r.left(), r.top(), inactW, r.height()));
         p.setClipping(false);
     }
 
-    // Border
-    p.setPen(QPen(m_active ? m_activeColor.darker(130) : QColor("#444"), 2));
+    // Border: dark green when live, subtle dark when inactive
+    p.setPen(QPen(m_active ? QColor(0x1e, 0x84, 0x49) : QColor("#444"), 2));
     p.setBrush(Qt::NoBrush);
     p.drawRoundedRect(r, 4, 4);
 
