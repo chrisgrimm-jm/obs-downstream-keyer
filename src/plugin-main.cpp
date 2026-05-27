@@ -46,6 +46,7 @@ static void on_frontend_event(enum obs_frontend_event event, void *)
                 mainWin->saveState().toBase64().toStdString());
 
         DskManager::instance().saveSettings();
+        DskManager::instance().shutdown();
 
         if (g_companionServer) {
             g_companionServer->stop();

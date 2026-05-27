@@ -27,6 +27,11 @@ public:
     void loadSettings();
     void saveSettings();
 
+    // Disconnect from OBS and unregister hotkeys.
+    // Must be called while OBS core is still alive (OBS_FRONTEND_EVENT_EXIT).
+    // Safe to call more than once.
+    void shutdown();
+
     // Which scene to use as the DSK source scene
     const std::string &sceneName() const { return m_sceneName; }
     void setSceneName(const std::string &name);
@@ -88,9 +93,14 @@ private:
     static void cbItemRemove(void *data, calldata_t *cd);
     static void cbHotkeyToggle(void *data, obs_hotkey_id id, obs_hotkey_t *hk, bool pressed);
 
+    struct HotkeyCtx {
+        DskManager *mgr;
+        std::string name;
+    };
     struct HotkeyEntry {
         obs_hotkey_id id;
         std::string   sourceName;
+        HotkeyCtx    *ctx = nullptr;
     };
 
     std::string m_sceneName = "[DSK Layer]";
@@ -100,6 +110,8 @@ private:
 
     // Per-source auto-hide timer sequence numbers (incremented to cancel pending timers)
     std::unordered_map<std::string, uint64_t> m_timerSeq;
+
+    bool m_shutdown = false;
 
     std::unordered_map<std::string, DskTransitionConfig> m_transitions;
     std::vector<HotkeyEntry>                             m_hotkeys;

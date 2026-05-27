@@ -21,6 +21,16 @@ DskManager::DskManager() {}
 
 DskManager::~DskManager()
 {
+    // Do NOT call OBS APIs here — by the time static destructors run during
+    // exit(), OBS has already torn down its internal state (mutexes, sources).
+    // All OBS cleanup is done in shutdown(), called on OBS_FRONTEND_EVENT_EXIT.
+}
+
+void DskManager::shutdown()
+{
+    if (m_shutdown) return;
+    m_shutdown = true;
+
     unregisterAllHotkeys();
 
     obs_source_t *src = obs_get_source_by_name(m_sceneName.c_str());
@@ -265,14 +275,11 @@ void DskManager::registerHotkeys()
             std::string id   = "dsk_toggle_" + sname;
             std::string desc = "DSK: Toggle \"" + sname + "\"";
 
-            // Allocate per-hotkey context (freed in unregisterAllHotkeys)
-            struct Ctx { DskManager *mgr; std::string name; };
-            auto *ctx = new Ctx{mgr, sname};
-
+            auto *ctx = new HotkeyCtx{mgr, sname};
             obs_hotkey_id hkId = obs_hotkey_register_frontend(
                 id.c_str(), desc.c_str(), cbHotkeyToggle, ctx);
 
-            mgr->m_hotkeys.push_back({hkId, sname});
+            mgr->m_hotkeys.push_back({hkId, sname, ctx});
             return true;
         },
         this);
@@ -280,17 +287,17 @@ void DskManager::registerHotkeys()
 
 void DskManager::unregisterAllHotkeys()
 {
-    for (const auto &hk : m_hotkeys)
+    for (const auto &hk : m_hotkeys) {
         obs_hotkey_unregister(hk.id);
+        delete hk.ctx;
+    }
     m_hotkeys.clear();
 }
 
 void DskManager::cbHotkeyToggle(void *data, obs_hotkey_id, obs_hotkey_t *, bool pressed)
 {
     if (!pressed) return;
-    // data is a heap-allocated Ctx from registerHotkeys
-    struct Ctx { DskManager *mgr; std::string name; };
-    auto *ctx = static_cast<Ctx *>(data);
+    auto *ctx = static_cast<HotkeyCtx *>(data);
     ctx->mgr->toggle(ctx->name);
 }
 
