@@ -25,6 +25,7 @@ private slots:
     void refresh();
     void onToggleClicked(const QString &sourceName);
     void onTransitionClicked(const QString &sourceName);
+    void onSetColorClicked(const QString &sourceName);
     void onSettingsClicked();
     void onStateChanged(const QString &sourceName, bool active);
     void onViewToggle();

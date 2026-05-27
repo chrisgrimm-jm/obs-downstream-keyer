@@ -36,7 +36,9 @@ private:
     void sendError(QTcpSocket *sock, int status, const QString &msg);
 
     QByteArray buildStatusJson() const;
-    static QByteArray buildItemJson(const std::string &name, bool active);
+    // timeRemaining: seconds left (>=0), or -1 if no countdown is active.
+    static QByteArray buildItemJson(const std::string &name, bool active,
+                                    double timeRemaining = -1.0);
     static QByteArray escapeJson(const std::string &s);
 
     QTcpServer *m_server = nullptr;

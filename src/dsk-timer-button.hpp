@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QPushButton>
+#include <QColor>
 #include <QElapsedTimer>
 #include <QTimer>
 
@@ -20,15 +21,19 @@ public:
     // Grid mode: text is centered and font is smaller.
     void setGridMode(bool grid);
 
+    // Override the active (green) color. Pass an invalid QColor to reset to default.
+    void setActiveColor(const QColor &color);
+
 protected:
     void paintEvent(QPaintEvent *) override;
 
 private:
     float progress() const;
 
-    bool          m_active   = false;
-    bool          m_gridMode = false;
-    int           m_totalMs  = 0;
+    bool          m_active      = false;
+    bool          m_gridMode    = false;
+    int           m_totalMs     = 0;
+    QColor        m_activeColor = QColor(0x27, 0xae, 0x60); // default green
     QElapsedTimer m_elapsed;
-    QTimer       *m_ticker   = nullptr;
+    QTimer       *m_ticker      = nullptr;
 };

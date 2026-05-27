@@ -98,7 +98,8 @@ void CompanionServer::handleRequest(QTcpSocket *sock,
         if (name.empty()) { sendError(sock, 400, "empty name"); return; }
 
         if (method == "GET" && action.isEmpty()) {
-            sendJson(sock, 200, buildItemJson(name, mgr.isActive(name)));
+            sendJson(sock, 200, buildItemJson(name, mgr.isActive(name),
+                                             mgr.timeRemaining(name)));
             return;
         }
         if (method == "POST") {
@@ -106,7 +107,8 @@ void CompanionServer::handleRequest(QTcpSocket *sock,
             else if (action == "deactivate") mgr.deactivate(name);
             else if (action == "toggle")     mgr.toggle(name);
             else { sendError(sock, 404, "unknown action"); return; }
-            sendJson(sock, 200, buildItemJson(name, mgr.isActive(name)));
+            sendJson(sock, 200, buildItemJson(name, mgr.isActive(name),
+                                             mgr.timeRemaining(name)));
             return;
         }
     }
@@ -138,10 +140,15 @@ QByteArray CompanionServer::escapeJson(const std::string &s)
     return QByteArray::fromStdString(s).replace('\\', "\\\\").replace('"', "\\\"");
 }
 
-QByteArray CompanionServer::buildItemJson(const std::string &name, bool active)
+QByteArray CompanionServer::buildItemJson(const std::string &name, bool active,
+                                          double timeRemaining)
 {
-    return "{\"name\":\"" + escapeJson(name) + "\","
-           "\"active\":" + (active ? "true" : "false") + "}";
+    QByteArray json = "{\"name\":\"" + escapeJson(name) + "\","
+                      "\"active\":" + (active ? "true" : "false");
+    if (timeRemaining >= 0.0)
+        json += ",\"timeRemaining\":" + QByteArray::number(timeRemaining, 'f', 1);
+    json += "}";
+    return json;
 }
 
 QByteArray CompanionServer::buildStatusJson() const
@@ -152,7 +159,8 @@ QByteArray CompanionServer::buildStatusJson() const
     for (const auto &item : mgr.currentItems()) {
         if (!first) out += ",";
         first = false;
-        out += buildItemJson(item.sourceName, item.visible);
+        out += buildItemJson(item.sourceName, item.visible,
+                             mgr.timeRemaining(item.sourceName));
     }
     out += "]}";
     return out;

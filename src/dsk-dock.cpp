@@ -12,6 +12,7 @@
 #include <QFrame>
 #include <QPushButton>
 #include <QMenu>
+#include <QColorDialog>
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
@@ -117,9 +118,31 @@ void DskDock::buildListView(QVBoxLayout *layout)
         toggleBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         toggleBtn->setMinimumHeight(44);
         toggleBtn->setActive(item.visible);
+
+        // Apply saved button color
+        const DskTransitionConfig *cfg =
+            DskManager::instance().transitionConfig(item.sourceName);
+        if (cfg && !cfg->buttonColor.empty())
+            toggleBtn->setActiveColor(QColor(QString::fromStdString(cfg->buttonColor)));
+
         connect(toggleBtn, &QPushButton::clicked, this, [this, sname]() {
             onToggleClicked(sname);
         });
+
+        // Right-click menu
+        toggleBtn->setContextMenuPolicy(Qt::CustomContextMenu);
+        connect(toggleBtn, &QWidget::customContextMenuRequested, this,
+            [this, sname, toggleBtn](const QPoint &pos) {
+                QMenu menu(this);
+                menu.addAction("Configure Transitions\xe2\x80\xa6", this, [this, sname]() {
+                    onTransitionClicked(sname);
+                });
+                menu.addAction("Set Color\xe2\x80\xa6", this, [this, sname]() {
+                    onSetColorClicked(sname);
+                });
+                menu.exec(toggleBtn->mapToGlobal(pos));
+            });
+
         row->addWidget(toggleBtn);
 
         auto *transBtn = new QPushButton("T");
@@ -159,6 +182,12 @@ void DskDock::buildGridView(QVBoxLayout *layout)
         btn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         btn->setActive(item.visible);
 
+        // Apply saved button color
+        const DskTransitionConfig *cfg =
+            DskManager::instance().transitionConfig(item.sourceName);
+        if (cfg && !cfg->buttonColor.empty())
+            btn->setActiveColor(QColor(QString::fromStdString(cfg->buttonColor)));
+
         connect(btn, &QPushButton::clicked, this, [this, sname]() {
             onToggleClicked(sname);
         });
@@ -183,6 +212,9 @@ void DskDock::onGridContextMenu(const QString &sourceName, const QPoint &globalP
     QMenu menu(this);
     menu.addAction("Configure Transitions\xe2\x80\xa6", this, [this, sourceName]() {
         onTransitionClicked(sourceName);
+    });
+    menu.addAction("Set Color\xe2\x80\xa6", this, [this, sourceName]() {
+        onSetColorClicked(sourceName);
     });
     menu.exec(globalPos);
 }
@@ -254,6 +286,27 @@ void DskDock::onTransitionClicked(const QString &sourceName)
         DskManager::instance().saveSettings();
     });
     dlg->show();
+}
+
+void DskDock::onSetColorClicked(const QString &sourceName)
+{
+    std::string sname = sourceName.toStdString();
+
+    // Seed dialog with the currently saved color (or the default green)
+    QColor current(0x27, 0xae, 0x60);
+    const DskTransitionConfig *cfg = DskManager::instance().transitionConfig(sname);
+    if (cfg && !cfg->buttonColor.empty())
+        current = QColor(QString::fromStdString(cfg->buttonColor));
+
+    QColor picked = QColorDialog::getColor(current, this, "Choose Button Color");
+    if (!picked.isValid()) return; // user cancelled
+
+    DskManager::instance().setButtonColor(sname, picked.name().toStdString());
+    DskManager::instance().saveSettings();
+
+    // Update the live button without a full refresh
+    DskTimerButton *btn = findTimerButton(sourceName);
+    if (btn) btn->setActiveColor(picked);
 }
 
 void DskDock::onSettingsClicked()

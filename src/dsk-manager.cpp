@@ -129,17 +129,22 @@ void DskManager::activate(const std::string &sourceName)
     if (it != m_transitions.end() && it->second.autoDuration > 0) {
         uint64_t seq = ++m_timerSeq[sourceName];
         uint32_t ms  = it->second.autoDuration * 1000;
+        m_expiryTime[sourceName] = std::chrono::steady_clock::now()
+                                 + std::chrono::milliseconds(ms);
         QTimer::singleShot(ms, QCoreApplication::instance(),
             [this, sourceName, seq]() {
                 if (m_timerSeq[sourceName] == seq)
                     deactivate(sourceName);
             });
+    } else {
+        m_expiryTime.erase(sourceName); // no countdown — clear any stale entry
     }
 }
 
 void DskManager::deactivate(const std::string &sourceName)
 {
     ++m_timerSeq[sourceName]; // invalidate any pending auto-hide timer
+    m_expiryTime.erase(sourceName);
     obs_sceneitem_t *item = findItem(sourceName);
     if (!item) return;
     obs_sceneitem_set_visible(item, false);
@@ -168,6 +173,21 @@ void DskManager::setTransitionConfig(const std::string &sourceName,
 {
     m_transitions[sourceName] = cfg;
     applyTransitions(sourceName);
+}
+
+void DskManager::setButtonColor(const std::string &sourceName, const std::string &colorHex)
+{
+    m_transitions[sourceName].buttonColor = colorHex;
+}
+
+double DskManager::timeRemaining(const std::string &sourceName) const
+{
+    if (!isActive(sourceName)) return -1.0;
+    auto it = m_expiryTime.find(sourceName);
+    if (it == m_expiryTime.end()) return -1.0; // active but no countdown
+    double rem = std::chrono::duration<double>(
+        it->second - std::chrono::steady_clock::now()).count();
+    return rem < 0.0 ? 0.0 : rem;
 }
 
 // Applies the stored show/hide transition to the live scene item.
@@ -394,6 +414,8 @@ void DskManager::loadSettings()
                 const char *hs = obs_data_get_string(entry, "hide_settings");
                 if (hs) cfg.hideSettings = hs;
                 cfg.autoDuration = (uint32_t)obs_data_get_int(entry, "auto_dur");
+                const char *bc = obs_data_get_string(entry, "button_color");
+                if (bc) cfg.buttonColor = bc;
                 m_transitions[name] = cfg;
             }
             obs_data_release(entry);
@@ -451,6 +473,7 @@ void DskManager::saveSettings()
         obs_data_set_int(entry,    "hide_dur",      cfg.hideDuration);
         obs_data_set_string(entry, "hide_settings", cfg.hideSettings.c_str());
         obs_data_set_int(entry,    "auto_dur",      cfg.autoDuration);
+        obs_data_set_string(entry, "button_color",  cfg.buttonColor.c_str());
         obs_data_array_push_back(items, entry);
         obs_data_release(entry);
     }

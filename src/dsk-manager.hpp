@@ -6,6 +6,7 @@
 #include <vector>
 #include <functional>
 #include <cstdint>
+#include <chrono>
 
 // Per-source show/hide transition config.
 // When set, the manager applies these to the scene item so that toggling
@@ -18,6 +19,7 @@ struct DskTransitionConfig {
     uint32_t    hideDuration = 300;
     std::string hideSettings;  // JSON blob of transition source settings
     uint32_t    autoDuration = 0; // seconds before auto-hide (0 = disabled)
+    std::string buttonColor;   // hex color e.g. "#27ae60", empty = default green
 };
 
 class DskManager {
@@ -66,6 +68,12 @@ public:
     // Apply stored transition config to a live scene item (called on load + item add)
     void applyTransitions(const std::string &sourceName);
 
+    // Per-item button color (hex string, e.g. "#e74c3c"). Empty string = default.
+    void setButtonColor(const std::string &sourceName, const std::string &colorHex);
+
+    // Seconds remaining until auto-hide fires. Returns -1 if no countdown is active.
+    double timeRemaining(const std::string &sourceName) const;
+
     // ── Setup helper ──────────────────────────────────────────────────────────
     // Nests the DSK scene at the top of every other scene in the collection
     void addDskToAllScenes();
@@ -113,6 +121,8 @@ private:
 
     // Per-source auto-hide timer sequence numbers (incremented to cancel pending timers)
     std::unordered_map<std::string, uint64_t> m_timerSeq;
+    // Expiry time points for active auto-hide countdowns (used by timeRemaining())
+    std::unordered_map<std::string, std::chrono::steady_clock::time_point> m_expiryTime;
 
     bool m_shutdown = false;
 

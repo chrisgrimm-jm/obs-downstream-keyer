@@ -34,6 +34,12 @@ void DskTimerButton::setGridMode(bool grid)
     update();
 }
 
+void DskTimerButton::setActiveColor(const QColor &color)
+{
+    m_activeColor = color.isValid() ? color : QColor(0x27, 0xae, 0x60);
+    update();
+}
+
 float DskTimerButton::progress() const
 {
     if (!m_active)   return 0.0f;
@@ -53,9 +59,9 @@ void DskTimerButton::paintEvent(QPaintEvent *)
 
     QRectF r = QRectF(rect()).adjusted(1, 1, -1, -1);
 
-    QColor green = pressed ? QColor("#1e8449")
-                 : hovered ? QColor("#2ecc71")
-                           : QColor("#27ae60");
+    QColor green = pressed ? m_activeColor.darker(115)
+                 : hovered ? m_activeColor.lighter(115)
+                           : m_activeColor;
     QColor gray  = pressed ? QColor("#222")
                  : hovered ? QColor("#3a3a3a")
                            : QColor("#2c2c2c");
@@ -78,7 +84,7 @@ void DskTimerButton::paintEvent(QPaintEvent *)
     }
 
     // Border
-    p.setPen(QPen(m_active ? QColor("#1e8449") : QColor("#444"), 2));
+    p.setPen(QPen(m_active ? m_activeColor.darker(130) : QColor("#444"), 2));
     p.setBrush(Qt::NoBrush);
     p.drawRoundedRect(r, 4, 4);
 
