@@ -65,10 +65,9 @@ void DskTimerButton::paintEvent(QPaintEvent *)
         clip.addRoundedRect(r, 4, 4);
         p.setClipPath(clip);
 
-        float greenW = r.width() * prog;
+        float grayW = r.width() * (1.0f - prog);
         p.setBrush(gray);
-        p.drawRect(QRectF(r.left() + greenW, r.top(),
-                          r.width() - greenW, r.height()));
+        p.drawRect(QRectF(r.left(), r.top(), grayW, r.height()));
         p.setClipping(false);
     }
 
