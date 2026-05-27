@@ -39,10 +39,6 @@ public:
     int  httpPort() const   { return m_httpPort; }
     void setHttpPort(int p) { m_httpPort = p; }
 
-    // Dock position persistence (stores full QMainWindow state)
-    const std::string &dockState() const           { return m_dockState; }
-    void setDockState(const std::string &state)    { m_dockState = state; }
-
     // ── Item enumeration ──────────────────────────────────────────────────────
     struct ItemInfo {
         std::string sourceName;
@@ -105,8 +101,6 @@ private:
 
     std::string m_sceneName = "[DSK Layer]";
     int         m_httpPort  = 4488;
-
-    std::string m_dockState;
 
     // Per-source auto-hide timer sequence numbers (incremented to cancel pending timers)
     std::unordered_map<std::string, uint64_t> m_timerSeq;
