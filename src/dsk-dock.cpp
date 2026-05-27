@@ -140,6 +140,9 @@ void DskDock::buildListView(QVBoxLayout *layout)
                 menu.addAction("Set Color\xe2\x80\xa6", this, [this, sname]() {
                     onSetColorClicked(sname);
                 });
+                menu.addAction("Reset to Default Color", this, [this, sname]() {
+                    onResetColorClicked(sname);
+                });
                 menu.exec(toggleBtn->mapToGlobal(pos));
             });
 
@@ -215,6 +218,9 @@ void DskDock::onGridContextMenu(const QString &sourceName, const QPoint &globalP
     });
     menu.addAction("Set Color\xe2\x80\xa6", this, [this, sourceName]() {
         onSetColorClicked(sourceName);
+    });
+    menu.addAction("Reset to Default Color", this, [this, sourceName]() {
+        onResetColorClicked(sourceName);
     });
     menu.exec(globalPos);
 }
@@ -307,6 +313,15 @@ void DskDock::onSetColorClicked(const QString &sourceName)
     // Update the live button without a full refresh
     DskTimerButton *btn = findTimerButton(sourceName);
     if (btn) btn->setButtonColor(picked);
+}
+
+void DskDock::onResetColorClicked(const QString &sourceName)
+{
+    DskManager::instance().setButtonColor(sourceName.toStdString(), "");
+    DskManager::instance().saveSettings();
+
+    DskTimerButton *btn = findTimerButton(sourceName);
+    if (btn) btn->setButtonColor(QColor()); // invalid color → resets to default dark gray
 }
 
 void DskDock::onSettingsClicked()
