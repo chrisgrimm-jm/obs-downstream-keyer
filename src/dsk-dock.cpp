@@ -146,8 +146,8 @@ void DskDock::buildGridView(QVBoxLayout *layout)
     auto *grid       = new QGridLayout(gridWidget);
     grid->setContentsMargins(0, 0, 0, 0);
     grid->setSpacing(4);
-    grid->setColumnStretch(0, 1);
-    grid->setColumnStretch(1, 1);
+    for (int c = 0; c < 4; c++)
+        grid->setColumnStretch(c, 1);
 
     int col = 0, row = 0;
     for (const auto &item : items) {
@@ -171,7 +171,7 @@ void DskDock::buildGridView(QVBoxLayout *layout)
             });
 
         grid->addWidget(btn, row, col);
-        if (++col >= 2) { col = 0; ++row; }
+        if (++col >= 4) { col = 0; ++row; }
     }
 
     int insertAt = layout->count() - 1;
