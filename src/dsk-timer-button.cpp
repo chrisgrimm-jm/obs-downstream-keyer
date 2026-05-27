@@ -28,6 +28,12 @@ void DskTimerButton::setActive(bool active, int autoDurationMs)
     update();
 }
 
+void DskTimerButton::setGridMode(bool grid)
+{
+    m_gridMode = grid;
+    update();
+}
+
 float DskTimerButton::progress() const
 {
     if (!m_active)   return 0.0f;
@@ -78,11 +84,12 @@ void DskTimerButton::paintEvent(QPaintEvent *)
 
     // Label
     QFont f = font();
-    f.setPointSize(12);
+    f.setPointSize(m_gridMode ? 10 : 12);
     f.setBold(m_active);
     p.setFont(f);
     p.setPen(m_active ? QColor("#fff") : QColor("#aaa"));
-    p.drawText(rect().adjusted(8, 0, -8, 0),
-               Qt::AlignVCenter | Qt::AlignLeft,
-               text());
+    int textFlags = m_gridMode ? Qt::AlignCenter
+                               : (Qt::AlignVCenter | Qt::AlignLeft);
+    int pad = m_gridMode ? 4 : 8;
+    p.drawText(rect().adjusted(pad, 0, -pad, 0), textFlags, text());
 }

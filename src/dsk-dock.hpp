@@ -6,9 +6,11 @@
 #include <QVBoxLayout>
 #include <QScrollArea>
 #include <QLabel>
+#include <QPushButton>
 #include <QString>
 #include <string>
-#include <vector>
+
+enum class ViewMode { List, Grid };
 
 class DskDock : public QWidget {
     Q_OBJECT
@@ -25,15 +27,21 @@ private slots:
     void onTransitionClicked(const QString &sourceName);
     void onSettingsClicked();
     void onStateChanged(const QString &sourceName, bool active);
+    void onViewToggle();
 
 private:
     void buildUI();
-    void buildItemRow(QWidget *container, QVBoxLayout *layout,
-                      const std::string &sourceName, bool active);
+    void buildListView(QVBoxLayout *layout);
+    void buildGridView(QVBoxLayout *layout);
+    void onGridContextMenu(const QString &sourceName, const QPoint &globalPos);
 
     DskTimerButton *findTimerButton(const QString &sourceName) const;
+    void            updateViewToggleIcon();
 
-    QLabel       *m_sceneLabel    = nullptr;
-    QScrollArea  *m_scroll        = nullptr;
+    ViewMode     m_viewMode      = ViewMode::List;
+
+    QLabel       *m_sceneLabel   = nullptr;
+    QPushButton  *m_viewToggle   = nullptr;
+    QScrollArea  *m_scroll       = nullptr;
     QWidget      *m_itemContainer = nullptr;
 };

@@ -42,6 +42,9 @@ public:
     const std::string &dockState() const          { return m_dockState; }
     void setDockState(const std::string &state)   { m_dockState = state; }
 
+    int  viewMode() const        { return m_viewMode; }
+    void setViewMode(int mode)   { m_viewMode = mode; }
+
     // ── Item enumeration ──────────────────────────────────────────────────────
     struct ItemInfo {
         std::string sourceName;
@@ -106,6 +109,7 @@ private:
     int         m_httpPort  = 4488;
 
     std::string m_dockState;
+    int         m_viewMode = 0; // 0 = list, 1 = grid
 
     // Per-source auto-hide timer sequence numbers (incremented to cancel pending timers)
     std::unordered_map<std::string, uint64_t> m_timerSeq;

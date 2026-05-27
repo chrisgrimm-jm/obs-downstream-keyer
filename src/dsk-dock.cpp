@@ -4,12 +4,14 @@
 #include "dsk-settings.hpp"
 
 #include <QHBoxLayout>
+#include <QGridLayout>
 #include <QLabel>
 #include <QScrollArea>
 #include <QMetaObject>
 #include <QSizePolicy>
 #include <QFrame>
 #include <QPushButton>
+#include <QMenu>
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
@@ -33,6 +35,7 @@ static const char *kSettingsBtn =
 
 DskDock::DskDock(QWidget *parent) : QWidget(parent)
 {
+    m_viewMode = static_cast<ViewMode>(DskManager::instance().viewMode());
     buildUI();
 
     auto &mgr = DskManager::instance();
@@ -66,6 +69,13 @@ void DskDock::buildUI()
     topBar->addWidget(m_sceneLabel);
     topBar->addStretch();
 
+    m_viewToggle = new QPushButton();
+    m_viewToggle->setStyleSheet(kSettingsBtn);
+    m_viewToggle->setFixedHeight(22);
+    m_viewToggle->setToolTip("Toggle list / grid view");
+    connect(m_viewToggle, &QPushButton::clicked, this, &DskDock::onViewToggle);
+    topBar->addWidget(m_viewToggle);
+
     auto *settingsBtn = new QPushButton("Settings");
     settingsBtn->setStyleSheet(kSettingsBtn);
     settingsBtn->setFixedHeight(22);
@@ -88,57 +98,107 @@ void DskDock::buildUI()
     m_scroll->setWidget(m_itemContainer);
     root->addWidget(m_scroll);
 
+    updateViewToggleIcon();
     refresh();
 }
 
-void DskDock::buildItemRow(QWidget * /*container*/, QVBoxLayout *layout,
-                            const std::string &sourceName, bool active)
+void DskDock::buildListView(QVBoxLayout *layout)
 {
-    auto *row = new QHBoxLayout();
-    row->setContentsMargins(0, 0, 0, 0);
-    row->setSpacing(4);
+    auto &mgr = DskManager::instance();
 
-    QString sname = QString::fromStdString(sourceName);
+    for (const auto &item : mgr.currentItems()) {
+        QString sname = QString::fromStdString(item.sourceName);
 
-    auto *toggleBtn = new DskTimerButton(sname, this);
-    toggleBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    toggleBtn->setMinimumHeight(44);
-    toggleBtn->setActive(active); // no countdown on initial build — just show state
+        auto *row = new QHBoxLayout();
+        row->setContentsMargins(0, 0, 0, 0);
+        row->setSpacing(4);
 
-    connect(toggleBtn, &QPushButton::clicked, this, [this, sname]() {
-        onToggleClicked(sname);
-    });
-    row->addWidget(toggleBtn);
+        auto *toggleBtn = new DskTimerButton(sname, this);
+        toggleBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        toggleBtn->setMinimumHeight(44);
+        toggleBtn->setActive(item.visible);
+        connect(toggleBtn, &QPushButton::clicked, this, [this, sname]() {
+            onToggleClicked(sname);
+        });
+        row->addWidget(toggleBtn);
 
-    auto *transBtn = new QPushButton("T");
-    transBtn->setStyleSheet(kTransBtn);
-    transBtn->setFixedSize(28, 44);
-    transBtn->setToolTip("Configure show/hide transitions for this item");
-    connect(transBtn, &QPushButton::clicked, this, [this, sname]() {
-        onTransitionClicked(sname);
-    });
-    row->addWidget(transBtn);
+        auto *transBtn = new QPushButton("T");
+        transBtn->setStyleSheet(kTransBtn);
+        transBtn->setFixedSize(28, 44);
+        transBtn->setToolTip("Configure show/hide transitions for this item");
+        connect(transBtn, &QPushButton::clicked, this, [this, sname]() {
+            onTransitionClicked(sname);
+        });
+        row->addWidget(transBtn);
+
+        int insertAt = layout->count() - 1;
+        layout->insertLayout(insertAt < 0 ? 0 : insertAt, row);
+    }
+}
+
+void DskDock::buildGridView(QVBoxLayout *layout)
+{
+    auto &mgr   = DskManager::instance();
+    auto  items = mgr.currentItems();
+    if (items.empty()) return;
+
+    auto *gridWidget = new QWidget();
+    auto *grid       = new QGridLayout(gridWidget);
+    grid->setContentsMargins(0, 0, 0, 0);
+    grid->setSpacing(4);
+    grid->setColumnStretch(0, 1);
+    grid->setColumnStretch(1, 1);
+
+    int col = 0, row = 0;
+    for (const auto &item : items) {
+        QString sname = QString::fromStdString(item.sourceName);
+
+        auto *btn = new DskTimerButton(sname, gridWidget);
+        btn->setGridMode(true);
+        btn->setMinimumHeight(55);
+        btn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        btn->setActive(item.visible);
+
+        connect(btn, &QPushButton::clicked, this, [this, sname]() {
+            onToggleClicked(sname);
+        });
+
+        // Right-click → Configure transitions
+        btn->setContextMenuPolicy(Qt::CustomContextMenu);
+        connect(btn, &QWidget::customContextMenuRequested, this,
+            [this, sname, btn](const QPoint &pos) {
+                onGridContextMenu(sname, btn->mapToGlobal(pos));
+            });
+
+        grid->addWidget(btn, row, col);
+        if (++col >= 2) { col = 0; ++row; }
+    }
 
     int insertAt = layout->count() - 1;
-    layout->insertLayout(insertAt < 0 ? 0 : insertAt, row);
+    layout->insertWidget(insertAt < 0 ? 0 : insertAt, gridWidget);
+}
+
+void DskDock::onGridContextMenu(const QString &sourceName, const QPoint &globalPos)
+{
+    QMenu menu(this);
+    menu.addAction("Configure Transitions\xe2\x80\xa6", this, [this, sourceName]() {
+        onTransitionClicked(sourceName);
+    });
+    menu.exec(globalPos);
+}
+
+void DskDock::updateViewToggleIcon()
+{
+    // Show the icon of the mode you'll switch TO when clicked
+    m_viewToggle->setText(m_viewMode == ViewMode::List ? "\xe2\x8a\x9e" : "\xe2\x98\xb0");
 }
 
 DskTimerButton *DskDock::findTimerButton(const QString &sourceName) const
 {
-    auto *layout = qobject_cast<QVBoxLayout *>(m_itemContainer->layout());
-    if (!layout) return nullptr;
-
-    for (int i = 0; i < layout->count(); i++) {
-        QLayoutItem *li = layout->itemAt(i);
-        if (!li) continue;
-        auto *row = qobject_cast<QHBoxLayout *>(li->layout());
-        if (!row) continue;
-        QLayoutItem *first = row->itemAt(0);
-        if (!first) continue;
-        auto *btn = qobject_cast<DskTimerButton *>(first->widget());
-        if (btn && btn->text() == sourceName)
+    const auto buttons = m_itemContainer->findChildren<DskTimerButton *>();
+    for (auto *btn : buttons)
+        if (btn->text() == sourceName)
             return btn;
-    }
     return nullptr;
 }
 
@@ -155,8 +215,10 @@ void DskDock::refresh()
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(4);
 
-    for (const auto &item : mgr.currentItems())
-        buildItemRow(m_itemContainer, layout, item.sourceName, item.visible);
+    if (m_viewMode == ViewMode::List)
+        buildListView(layout);
+    else
+        buildGridView(layout);
 
     layout->addStretch();
     m_scroll->setWidget(m_itemContainer);
@@ -168,6 +230,15 @@ void DskDock::refresh()
         hint->setStyleSheet("color: #555; font-size: 11px;");
         layout->insertWidget(0, hint);
     }
+}
+
+void DskDock::onViewToggle()
+{
+    m_viewMode = (m_viewMode == ViewMode::List) ? ViewMode::Grid : ViewMode::List;
+    DskManager::instance().setViewMode(static_cast<int>(m_viewMode));
+    DskManager::instance().saveSettings();
+    updateViewToggleIcon();
+    refresh();
 }
 
 void DskDock::onToggleClicked(const QString &sourceName)

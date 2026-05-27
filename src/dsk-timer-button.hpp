@@ -17,14 +17,18 @@ public:
     // autoDurationMs  > 0  →  starts countdown animation from full to empty.
     void setActive(bool active, int autoDurationMs = 0);
 
+    // Grid mode: text is centered and font is smaller.
+    void setGridMode(bool grid);
+
 protected:
     void paintEvent(QPaintEvent *) override;
 
 private:
     float progress() const;
 
-    bool          m_active  = false;
-    int           m_totalMs = 0;
+    bool          m_active   = false;
+    bool          m_gridMode = false;
+    int           m_totalMs  = 0;
     QElapsedTimer m_elapsed;
-    QTimer       *m_ticker  = nullptr;
+    QTimer       *m_ticker   = nullptr;
 };
