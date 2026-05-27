@@ -1,10 +1,11 @@
 #pragma once
 
+#include "dsk-timer-button.hpp"
+
 #include <QWidget>
 #include <QVBoxLayout>
 #include <QScrollArea>
 #include <QLabel>
-#include <QPushButton>
 #include <QString>
 #include <string>
 #include <vector>
@@ -30,9 +31,9 @@ private:
     void buildItemRow(QWidget *container, QVBoxLayout *layout,
                       const std::string &sourceName, bool active);
 
-    static void styleToggle(QPushButton *btn, bool active, const QString &label);
+    DskTimerButton *findTimerButton(const QString &sourceName) const;
 
-    QLabel       *m_sceneLabel   = nullptr;
-    QScrollArea  *m_scroll       = nullptr;
+    QLabel       *m_sceneLabel    = nullptr;
+    QScrollArea  *m_scroll        = nullptr;
     QWidget      *m_itemContainer = nullptr;
 };

@@ -1,0 +1,30 @@
+#pragma once
+
+#include <QPushButton>
+#include <QElapsedTimer>
+#include <QTimer>
+
+// Toggle button that paints a shrinking green progress bar when a countdown
+// is active. Fully green = full time remaining; fully gray = inactive/expired.
+class DskTimerButton : public QPushButton {
+    Q_OBJECT
+
+public:
+    explicit DskTimerButton(const QString &text, QWidget *parent = nullptr);
+
+    // Call when state changes.
+    // autoDurationMs == 0  →  no countdown, button stays solid green.
+    // autoDurationMs  > 0  →  starts countdown animation from full to empty.
+    void setActive(bool active, int autoDurationMs = 0);
+
+protected:
+    void paintEvent(QPaintEvent *) override;
+
+private:
+    float progress() const;
+
+    bool          m_active  = false;
+    int           m_totalMs = 0;
+    QElapsedTimer m_elapsed;
+    QTimer       *m_ticker  = nullptr;
+};

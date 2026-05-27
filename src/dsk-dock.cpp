@@ -9,26 +9,9 @@
 #include <QMetaObject>
 #include <QSizePolicy>
 #include <QFrame>
+#include <QPushButton>
 
 // ── Styles ────────────────────────────────────────────────────────────────────
-
-static const char *kActive =
-    "QPushButton {"
-    "  background: #27ae60; color: #fff;"
-    "  border: 2px solid #1e8449; border-radius: 4px;"
-    "  font-weight: bold; font-size: 12px; padding: 10px 8px;"
-    "  text-align: left;"
-    "}"
-    "QPushButton:hover { background: #2ecc71; }";
-
-static const char *kInactive =
-    "QPushButton {"
-    "  background: #2c2c2c; color: #aaa;"
-    "  border: 2px solid #444; border-radius: 4px;"
-    "  font-size: 12px; padding: 10px 8px;"
-    "  text-align: left;"
-    "}"
-    "QPushButton:hover { background: #3a3a3a; color: #ddd; border-color: #666; }";
 
 static const char *kTransBtn =
     "QPushButton {"
@@ -115,19 +98,18 @@ void DskDock::buildItemRow(QWidget * /*container*/, QVBoxLayout *layout,
     row->setContentsMargins(0, 0, 0, 0);
     row->setSpacing(4);
 
-    // Main toggle button
-    auto *toggleBtn = new QPushButton();
+    QString sname = QString::fromStdString(sourceName);
+
+    auto *toggleBtn = new DskTimerButton(sname, this);
     toggleBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     toggleBtn->setMinimumHeight(44);
-    styleToggle(toggleBtn, active, QString::fromStdString(sourceName));
+    toggleBtn->setActive(active); // no countdown on initial build — just show state
 
-    QString sname = QString::fromStdString(sourceName);
     connect(toggleBtn, &QPushButton::clicked, this, [this, sname]() {
         onToggleClicked(sname);
     });
     row->addWidget(toggleBtn);
 
-    // Transition config button
     auto *transBtn = new QPushButton("T");
     transBtn->setStyleSheet(kTransBtn);
     transBtn->setFixedSize(28, 44);
@@ -137,15 +119,27 @@ void DskDock::buildItemRow(QWidget * /*container*/, QVBoxLayout *layout,
     });
     row->addWidget(transBtn);
 
-    // Insert before the trailing stretch (last item)
     int insertAt = layout->count() - 1;
     layout->insertLayout(insertAt < 0 ? 0 : insertAt, row);
 }
 
-void DskDock::styleToggle(QPushButton *btn, bool active, const QString &label)
+DskTimerButton *DskDock::findTimerButton(const QString &sourceName) const
 {
-    btn->setText(label);
-    btn->setStyleSheet(active ? kActive : kInactive);
+    auto *layout = qobject_cast<QVBoxLayout *>(m_itemContainer->layout());
+    if (!layout) return nullptr;
+
+    for (int i = 0; i < layout->count(); i++) {
+        QLayoutItem *li = layout->itemAt(i);
+        if (!li) continue;
+        auto *row = qobject_cast<QHBoxLayout *>(li->layout());
+        if (!row) continue;
+        QLayoutItem *first = row->itemAt(0);
+        if (!first) continue;
+        auto *btn = qobject_cast<DskTimerButton *>(first->widget());
+        if (btn && btn->text() == sourceName)
+            return btn;
+    }
+    return nullptr;
 }
 
 // ── Slots ─────────────────────────────────────────────────────────────────────
@@ -155,7 +149,6 @@ void DskDock::refresh()
     auto &mgr = DskManager::instance();
     m_sceneLabel->setText(QString::fromStdString(mgr.sceneName()));
 
-    // Rebuild the item container
     delete m_itemContainer;
     m_itemContainer = new QWidget();
     auto *layout = new QVBoxLayout(m_itemContainer);
@@ -168,7 +161,6 @@ void DskDock::refresh()
     layout->addStretch();
     m_scroll->setWidget(m_itemContainer);
 
-    // Show a hint when the scene is empty or doesn't exist
     if (mgr.currentItems().empty()) {
         auto *hint = new QLabel(
             "Open Settings to choose your\nDSK scene, then add sources\nto it in OBS.");
@@ -187,7 +179,6 @@ void DskDock::onTransitionClicked(const QString &sourceName)
 {
     DskItemSettings dlg(sourceName, this);
     dlg.exec();
-    // Changes are applied immediately inside the dialog
     DskManager::instance().saveSettings();
 }
 
@@ -202,26 +193,17 @@ void DskDock::onSettingsClicked()
 
 void DskDock::onStateChanged(const QString &sourceName, bool active)
 {
-    // Find and restyle the toggle button for this source
-    auto *layout = qobject_cast<QVBoxLayout *>(m_itemContainer->layout());
-    if (!layout) return;
+    DskTimerButton *btn = findTimerButton(sourceName);
+    if (!btn) return;
 
-    for (int i = 0; i < layout->count(); i++) {
-        QLayoutItem *li = layout->itemAt(i);
-        if (!li) continue;
-        QHBoxLayout *row = qobject_cast<QHBoxLayout *>(li->layout());
-        if (!row) continue;
-
-        QLayoutItem *first = row->itemAt(0);
-        if (!first) continue;
-        auto *btn = qobject_cast<QPushButton *>(first->widget());
-        if (!btn) continue;
-
-        if (btn->text() == sourceName) {
-            styleToggle(btn, active, sourceName);
-            break;
-        }
+    int autoDurationMs = 0;
+    if (active) {
+        const DskTransitionConfig *cfg =
+            DskManager::instance().transitionConfig(sourceName.toStdString());
+        if (cfg && cfg->autoDuration > 0)
+            autoDurationMs = (int)(cfg->autoDuration * 1000);
     }
+    btn->setActive(active, autoDurationMs);
 }
 
 void DskDock::scheduleRefresh()

@@ -38,6 +38,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
   src/plugin-main.cpp
   src/dsk-manager.cpp
   src/dsk-dock.cpp
+  src/dsk-timer-button.cpp
   src/dsk-item-settings.cpp
   src/dsk-settings.cpp
   src/companion-server.cpp
