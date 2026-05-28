@@ -57,6 +57,9 @@ Use the toggle icon in the dock header to switch between **list view** (one row 
 ### Color-Coded Buttons
 Right-click any button and choose **Set Color…** to assign a custom color for when that source is off-air. Use this to visually identify items at a glance — red for lower thirds, blue for sponsor bugs, etc. The button always turns solid green when live regardless of its assigned color. Choose **Reset to Default Color** to go back to the standard dark gray.
 
+### Drag-and-Drop Reordering
+Click and hold any button then drag it to a new position. A green indicator line shows where it will land. Releasing drops it into place and the OBS scene item order is updated immediately. Works in both list and grid view. Note: reordering sources in OBS's Sources panel does not update the dock order — use the dock itself to reorder.
+
 ### Timer Progress Bar
 When auto-hide is enabled on an item, the toggle button doubles as a visual countdown. The button starts fully green when activated and the color drains left to right back toward the item's assigned color over the configured duration. When time runs out the item is hidden automatically.
 
