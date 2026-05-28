@@ -234,6 +234,46 @@ void DskManager::applyTransitions(const std::string &sourceName)
     }
 }
 
+// ── Reorder ───────────────────────────────────────────────────────────────────
+
+void DskManager::reorderItem(const std::string &sourceName, int newIndex)
+{
+    obs_scene_t *scene = dskScene();
+    if (!scene) return;
+
+    // Snapshot current item order
+    std::vector<obs_sceneitem_t *> items;
+    obs_scene_enum_items(scene,
+        [](obs_scene_t *, obs_sceneitem_t *item, void *param) -> bool {
+            static_cast<std::vector<obs_sceneitem_t *> *>(param)->push_back(item);
+            return true;
+        },
+        &items);
+
+    // Find the item being moved
+    int fromIdx = -1;
+    for (int i = 0; i < (int)items.size(); i++) {
+        obs_source_t *src = obs_sceneitem_get_source(items[i]);
+        if (src && obs_source_get_name(src) == sourceName) {
+            fromIdx = i;
+            break;
+        }
+    }
+    if (fromIdx < 0) return;
+
+    newIndex = std::max(0, std::min(newIndex, (int)items.size() - 1));
+    if (fromIdx == newIndex) return;
+
+    // Move within the vector and apply to OBS
+    obs_sceneitem_t *moved = items[fromIdx];
+    items.erase(items.begin() + fromIdx);
+    items.insert(items.begin() + newIndex, moved);
+
+    obs_scene_reorder_items(scene, items.data(), items.size());
+
+    if (m_refreshCb) m_refreshCb();
+}
+
 // ── Setup helper ──────────────────────────────────────────────────────────────
 
 void DskManager::addDskToAllScenes()

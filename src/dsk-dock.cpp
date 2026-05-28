@@ -13,6 +13,11 @@
 #include <QPushButton>
 #include <QMenu>
 #include <QColorDialog>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <algorithm>
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
@@ -249,6 +254,16 @@ void DskDock::refresh()
 
     delete m_itemContainer;
     m_itemContainer = new QWidget();
+    m_itemContainer->setAcceptDrops(true);
+    m_itemContainer->installEventFilter(this);
+
+    // Thin green line shown between items during drag-over
+    m_dropIndicator = new QWidget(m_itemContainer);
+    m_dropIndicator->setFixedHeight(3);
+    m_dropIndicator->setStyleSheet("background: #2ecc71; border-radius: 1px;");
+    m_dropIndicator->setAttribute(Qt::WA_TransparentForMouseEvents);
+    m_dropIndicator->hide();
+
     auto *layout = new QVBoxLayout(m_itemContainer);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(4);
@@ -351,4 +366,82 @@ void DskDock::onStateChanged(const QString &sourceName, bool active)
 void DskDock::scheduleRefresh()
 {
     QMetaObject::invokeMethod(this, "refresh", Qt::QueuedConnection);
+}
+
+// ── Drag-and-drop reordering ──────────────────────────────────────────────────
+
+bool DskDock::eventFilter(QObject *obj, QEvent *event)
+{
+    if (obj != m_itemContainer)
+        return QWidget::eventFilter(obj, event);
+
+    switch (event->type()) {
+    case QEvent::DragEnter: {
+        auto *e = static_cast<QDragEnterEvent *>(event);
+        if (e->mimeData()->hasFormat("application/x-dsk-source"))
+            e->acceptProposedAction();
+        return true;
+    }
+    case QEvent::DragMove: {
+        auto *e = static_cast<QDragMoveEvent *>(event);
+        if (!e->mimeData()->hasFormat("application/x-dsk-source")) break;
+        e->acceptProposedAction();
+        updateDropIndicator(e->position().toPoint());
+        return true;
+    }
+    case QEvent::DragLeave:
+        hideDropIndicator();
+        return true;
+    case QEvent::Drop: {
+        auto *e = static_cast<QDropEvent *>(event);
+        if (!e->mimeData()->hasFormat("application/x-dsk-source")) break;
+        QString name = QString::fromUtf8(
+            e->mimeData()->data("application/x-dsk-source"));
+        int idx = m_dropIndex;
+        hideDropIndicator();
+        e->acceptProposedAction();
+        if (idx >= 0)
+            DskManager::instance().reorderItem(name.toStdString(), idx);
+        return true;
+    }
+    default: break;
+    }
+    return QWidget::eventFilter(obj, event);
+}
+
+void DskDock::updateDropIndicator(const QPoint &pos)
+{
+    if (!m_dropIndicator) return;
+
+    // Collect all timer buttons, sorted top-to-bottom then left-to-right
+    auto buttons = m_itemContainer->findChildren<DskTimerButton *>();
+    std::sort(buttons.begin(), buttons.end(), [this](DskTimerButton *a, DskTimerButton *b) {
+        QPoint pa = a->mapTo(m_itemContainer, QPoint(0, 0));
+        QPoint pb = b->mapTo(m_itemContainer, QPoint(0, 0));
+        return pa.y() != pb.y() ? pa.y() < pb.y() : pa.x() < pb.x();
+    });
+
+    if (buttons.isEmpty()) { hideDropIndicator(); return; }
+
+    // Default: before the first item
+    m_dropIndex = 0;
+    int indicatorY = buttons.first()->mapTo(m_itemContainer, QPoint(0, 0)).y() - 3;
+
+    for (int i = 0; i < buttons.size(); i++) {
+        QPoint p = buttons[i]->mapTo(m_itemContainer, QPoint(0, 0));
+        if (pos.y() > p.y() + buttons[i]->height() / 2) {
+            m_dropIndex = i + 1;
+            indicatorY  = p.y() + buttons[i]->height() + 1;
+        }
+    }
+
+    m_dropIndicator->setGeometry(0, indicatorY, m_itemContainer->width(), 3);
+    m_dropIndicator->show();
+    m_dropIndicator->raise();
+}
+
+void DskDock::hideDropIndicator()
+{
+    m_dropIndex = -1;
+    if (m_dropIndicator) m_dropIndicator->hide();
 }

@@ -74,6 +74,9 @@ public:
     // Seconds remaining until auto-hide fires. Returns -1 if no countdown is active.
     double timeRemaining(const std::string &sourceName) const;
 
+    // Reorder a source to newIndex (0 = first in dock) within the DSK scene.
+    void reorderItem(const std::string &sourceName, int newIndex);
+
     // ── Setup helper ──────────────────────────────────────────────────────────
     // Nests the DSK scene at the top of every other scene in the collection
     void addDskToAllScenes();

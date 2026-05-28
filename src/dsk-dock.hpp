@@ -31,6 +31,9 @@ private slots:
     void onStateChanged(const QString &sourceName, bool active);
     void onViewToggle();
 
+protected:
+    bool eventFilter(QObject *obj, QEvent *event) override;
+
 private:
     void buildUI();
     void buildListView(QVBoxLayout *layout);
@@ -39,11 +42,15 @@ private:
 
     DskTimerButton *findTimerButton(const QString &sourceName) const;
     void            updateViewToggleIcon();
+    void            updateDropIndicator(const QPoint &posInContainer);
+    void            hideDropIndicator();
 
-    ViewMode     m_viewMode      = ViewMode::List;
+    ViewMode     m_viewMode        = ViewMode::List;
+    int          m_dropIndex       = -1;
 
-    QLabel       *m_sceneLabel   = nullptr;
-    QPushButton  *m_viewToggle   = nullptr;
-    QScrollArea  *m_scroll       = nullptr;
-    QWidget      *m_itemContainer = nullptr;
+    QLabel       *m_sceneLabel     = nullptr;
+    QPushButton  *m_viewToggle     = nullptr;
+    QScrollArea  *m_scroll         = nullptr;
+    QWidget      *m_itemContainer  = nullptr;
+    QWidget      *m_dropIndicator  = nullptr;
 };

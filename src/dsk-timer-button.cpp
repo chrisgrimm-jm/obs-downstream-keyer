@@ -1,5 +1,9 @@
 #include "dsk-timer-button.hpp"
 
+#include <QApplication>
+#include <QDrag>
+#include <QMimeData>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
 
@@ -38,6 +42,49 @@ void DskTimerButton::setButtonColor(const QColor &color)
 {
     m_buttonColor = color.isValid() ? color : QColor(0x2c, 0x2c, 0x2c);
     update();
+}
+
+void DskTimerButton::mousePressEvent(QMouseEvent *e)
+{
+    if (e->button() == Qt::LeftButton) {
+        m_pressPos = e->pos();
+        m_dragging = false;
+    }
+    QPushButton::mousePressEvent(e);
+}
+
+void DskTimerButton::mouseMoveEvent(QMouseEvent *e)
+{
+    if (!m_dragging && (e->buttons() & Qt::LeftButton) &&
+        (e->pos() - m_pressPos).manhattanLength() >= QApplication::startDragDistance()) {
+        m_dragging = true;
+
+        // Release pressed state before handing off to drag system
+        setDown(false);
+
+        auto *drag = new QDrag(this);
+        auto *mime = new QMimeData();
+        mime->setData("application/x-dsk-source", text().toUtf8());
+        drag->setMimeData(mime);
+
+        // Render button as semi-transparent drag ghost
+        QPixmap pix(size());
+        pix.fill(Qt::transparent);
+        render(&pix);
+        QPixmap ghost(size());
+        ghost.fill(Qt::transparent);
+        QPainter gp(&ghost);
+        gp.setOpacity(0.65);
+        gp.drawPixmap(0, 0, pix);
+        gp.end();
+        drag->setPixmap(ghost);
+        drag->setHotSpot(m_pressPos);
+
+        drag->exec(Qt::MoveAction);
+        m_dragging = false;
+        return;
+    }
+    QPushButton::mouseMoveEvent(e);
 }
 
 float DskTimerButton::progress() const

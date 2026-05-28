@@ -27,14 +27,18 @@ public:
 
 protected:
     void paintEvent(QPaintEvent *) override;
+    void mousePressEvent(QMouseEvent *e) override;
+    void mouseMoveEvent(QMouseEvent *e) override;
 
 private:
     float progress() const;
 
     bool          m_active      = false;
     bool          m_gridMode    = false;
+    bool          m_dragging    = false;
     int           m_totalMs     = 0;
     QColor        m_buttonColor = QColor(0x2c, 0x2c, 0x2c); // inactive color (default dark gray)
+    QPoint        m_pressPos;
     QElapsedTimer m_elapsed;
     QTimer       *m_ticker      = nullptr;
 };
