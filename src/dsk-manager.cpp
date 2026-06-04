@@ -363,11 +363,34 @@ void DskManager::cbHotkeyToggle(void *data, obs_hotkey_id, obs_hotkey_t *, bool 
 
 // ── Scene signals ─────────────────────────────────────────────────────────────
 
+void DskManager::connectSourceRenameSignal(obs_source_t *src)
+{
+    signal_handler_t *sh = obs_source_get_signal_handler(src);
+    signal_handler_connect(sh, "rename", cbSourceRename, this);
+}
+
+void DskManager::disconnectSourceRenameSignal(obs_source_t *src)
+{
+    signal_handler_t *sh = obs_source_get_signal_handler(src);
+    signal_handler_disconnect(sh, "rename", cbSourceRename, this);
+}
+
 void DskManager::connectSceneSignals(obs_source_t *sceneSource)
 {
     signal_handler_t *sh = obs_source_get_signal_handler(sceneSource);
     signal_handler_connect(sh, "item_add",    cbItemAdd,    this);
     signal_handler_connect(sh, "item_remove", cbItemRemove, this);
+
+    // Also hook rename on every source already in the scene
+    obs_scene_t *scene = obs_scene_from_source(sceneSource);
+    if (!scene) return;
+    obs_scene_enum_items(scene,
+        [](obs_scene_t *, obs_sceneitem_t *item, void *param) -> bool {
+            obs_source_t *src = obs_sceneitem_get_source(item);
+            if (src) static_cast<DskManager *>(param)->connectSourceRenameSignal(src);
+            return true;
+        },
+        this);
 }
 
 void DskManager::disconnectSceneSignals(obs_source_t *sceneSource)
@@ -375,6 +398,17 @@ void DskManager::disconnectSceneSignals(obs_source_t *sceneSource)
     signal_handler_t *sh = obs_source_get_signal_handler(sceneSource);
     signal_handler_disconnect(sh, "item_add",    cbItemAdd,    this);
     signal_handler_disconnect(sh, "item_remove", cbItemRemove, this);
+
+    // Unhook rename from every source in the scene
+    obs_scene_t *scene = obs_scene_from_source(sceneSource);
+    if (!scene) return;
+    obs_scene_enum_items(scene,
+        [](obs_scene_t *, obs_sceneitem_t *item, void *param) -> bool {
+            obs_source_t *src = obs_sceneitem_get_source(item);
+            if (src) static_cast<DskManager *>(param)->disconnectSourceRenameSignal(src);
+            return true;
+        },
+        this);
 }
 
 void DskManager::cbItemAdd(void *data, calldata_t *cd)
@@ -393,6 +427,8 @@ void DskManager::cbItemAdd(void *data, calldata_t *cd)
         if (src) {
             const char *name = obs_source_get_name(src);
             if (name) mgr->applyTransitions(name);
+            // Track renames for this newly-added source
+            mgr->connectSourceRenameSignal(src);
         }
     }
 
@@ -405,9 +441,51 @@ void DskManager::cbItemAdd(void *data, calldata_t *cd)
 
 void DskManager::cbItemRemove(void *data, calldata_t *cd)
 {
-    (void)cd;
     auto *mgr = static_cast<DskManager *>(data);
 
+    // Stop tracking renames for the source being removed
+    obs_sceneitem_t *item = nullptr;
+    calldata_get_ptr(cd, "item", &item);
+    if (item) {
+        obs_source_t *src = obs_sceneitem_get_source(item);
+        if (src) mgr->disconnectSourceRenameSignal(src);
+    }
+
+    mgr->unregisterAllHotkeys();
+    mgr->registerHotkeys();
+
+    if (mgr->m_refreshCb) mgr->m_refreshCb();
+}
+
+void DskManager::cbSourceRename(void *data, calldata_t *cd)
+{
+    auto       *mgr  = static_cast<DskManager *>(data);
+    const char *prev = calldata_string(cd, "prev_name");
+    const char *next = calldata_string(cd, "new_name");
+    if (!prev || !next) return;
+
+    std::string prevStr(prev), nextStr(next);
+
+    // Re-key every name-keyed map so settings survive the rename
+    auto it = mgr->m_transitions.find(prevStr);
+    if (it != mgr->m_transitions.end()) {
+        mgr->m_transitions[nextStr] = std::move(it->second);
+        mgr->m_transitions.erase(it);
+    }
+
+    auto seqIt = mgr->m_timerSeq.find(prevStr);
+    if (seqIt != mgr->m_timerSeq.end()) {
+        mgr->m_timerSeq[nextStr] = seqIt->second;
+        mgr->m_timerSeq.erase(seqIt);
+    }
+
+    auto expIt = mgr->m_expiryTime.find(prevStr);
+    if (expIt != mgr->m_expiryTime.end()) {
+        mgr->m_expiryTime[nextStr] = expIt->second;
+        mgr->m_expiryTime.erase(expIt);
+    }
+
+    // Rebuild hotkeys with the new name and refresh the dock
     mgr->unregisterAllHotkeys();
     mgr->registerHotkeys();
 

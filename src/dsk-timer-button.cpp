@@ -145,5 +145,8 @@ void DskTimerButton::paintEvent(QPaintEvent *)
     int textFlags = m_gridMode ? Qt::AlignCenter
                                : (Qt::AlignVCenter | Qt::AlignLeft);
     int pad = m_gridMode ? 4 : 8;
-    p.drawText(rect().adjusted(pad, 0, -pad, 0), textFlags, text());
+    // Elide rather than clip silently when text is too wide for the button
+    QString displayText = p.fontMetrics().elidedText(
+        text(), Qt::ElideRight, rect().width() - 2 * pad);
+    p.drawText(rect().adjusted(pad, 0, -pad, 0), textFlags, displayText);
 }
