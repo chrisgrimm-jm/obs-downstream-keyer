@@ -435,6 +435,9 @@ void DskManager::loadSettings()
 
     m_viewMode = (int)obs_data_get_int(root, "view_mode");
 
+    int gc = (int)obs_data_get_int(root, "grid_columns");
+    if (gc >= 2 && gc <= 8) m_gridColumns = gc;
+
     obs_data_array_t *items = obs_data_get_array(root, "item_transitions");
     if (items) {
         size_t count = obs_data_array_count(items);
@@ -499,8 +502,9 @@ void DskManager::saveSettings()
     obs_data_t *root = obs_data_create();
     obs_data_set_string(root, "dsk_scene", m_sceneName.c_str());
     obs_data_set_int(root, "http_port", m_httpPort);
-    obs_data_set_string(root, "dock_state", m_dockState.c_str());
-    obs_data_set_int(root,    "view_mode",  m_viewMode);
+    obs_data_set_string(root, "dock_state",   m_dockState.c_str());
+    obs_data_set_int(root,    "view_mode",    m_viewMode);
+    obs_data_set_int(root,    "grid_columns", m_gridColumns);
 
     obs_data_array_t *items = obs_data_array_create();
     for (const auto &[name, cfg] : m_transitions) {

@@ -18,6 +18,7 @@ private:
     void buildUI();
     void populateSceneCombo();
 
-    QComboBox *m_sceneCombo   = nullptr;
-    QSpinBox  *m_httpPortSpin = nullptr;
+    QComboBox *m_sceneCombo      = nullptr;
+    QSpinBox  *m_httpPortSpin    = nullptr;
+    QSpinBox  *m_gridColumnsSpin = nullptr;
 };

@@ -74,6 +74,22 @@ void DskSettings::buildUI()
     setupLayout->addLayout(btnRow);
     root->addWidget(setupGroup);
 
+    // ── Dock display ──────────────────────────────────────────────────────────
+    auto *displayGroup = new QGroupBox("Dock Display");
+    auto *displayForm  = new QFormLayout(displayGroup);
+
+    m_gridColumnsSpin = new QSpinBox();
+    m_gridColumnsSpin->setRange(2, 8);
+    m_gridColumnsSpin->setValue(DskManager::instance().gridColumns());
+    m_gridColumnsSpin->setSuffix(" columns");
+    displayForm->addRow("Grid view columns:", m_gridColumnsSpin);
+
+    auto *colHint = new QLabel("Number of columns shown when the dock is in grid mode.");
+    colHint->setWordWrap(true);
+    colHint->setStyleSheet("color: #999; font-size: 11px;");
+    displayForm->addRow(colHint);
+    root->addWidget(displayGroup);
+
     // ── Companion HTTP ────────────────────────────────────────────────────────
     auto *httpGroup = new QGroupBox("Bitfocus Companion / HTTP API");
     auto *httpForm  = new QFormLayout(httpGroup);
@@ -134,6 +150,7 @@ void DskSettings::onAccept()
 {
     auto &mgr = DskManager::instance();
     mgr.setSceneName(m_sceneCombo->currentText().toStdString());
+    mgr.setGridColumns(m_gridColumnsSpin->value());
 
     int newPort = m_httpPortSpin->value();
     if (newPort != mgr.httpPort()) {

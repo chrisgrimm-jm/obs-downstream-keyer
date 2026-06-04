@@ -19,6 +19,11 @@
 #include <QMimeData>
 #include <algorithm>
 
+// ── Transition clipboard (in-memory, session-only) ────────────────────────────
+
+static DskTransitionConfig s_clipboardTransition;
+static bool                s_hasClipboard = false;
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 static const char *kTransBtn =
@@ -142,6 +147,14 @@ void DskDock::buildListView(QVBoxLayout *layout)
                 menu.addAction("Configure Transitions\xe2\x80\xa6", this, [this, sname]() {
                     onTransitionClicked(sname);
                 });
+                menu.addAction("Copy Transitions", this, [this, sname]() {
+                    onCopyTransitions(sname);
+                });
+                auto *pasteAct = menu.addAction("Paste Transitions", this, [this, sname]() {
+                    onPasteTransitions(sname);
+                });
+                pasteAct->setEnabled(s_hasClipboard);
+                menu.addSeparator();
                 menu.addAction("Set Color\xe2\x80\xa6", this, [this, sname]() {
                     onSetColorClicked(sname);
                 });
@@ -175,9 +188,10 @@ void DskDock::buildGridView(QVBoxLayout *layout)
 
     auto *gridWidget = new QWidget();
     auto *grid       = new QGridLayout(gridWidget);
+    const int cols = DskManager::instance().gridColumns();
     grid->setContentsMargins(0, 0, 0, 0);
     grid->setSpacing(4);
-    for (int c = 0; c < 4; c++)
+    for (int c = 0; c < cols; c++)
         grid->setColumnStretch(c, 1);
 
     int col = 0, row = 0;
@@ -208,7 +222,7 @@ void DskDock::buildGridView(QVBoxLayout *layout)
             });
 
         grid->addWidget(btn, row, col);
-        if (++col >= 4) { col = 0; ++row; }
+        if (++col >= cols) { col = 0; ++row; }
     }
 
     int insertAt = layout->count() - 1;
@@ -221,6 +235,14 @@ void DskDock::onGridContextMenu(const QString &sourceName, const QPoint &globalP
     menu.addAction("Configure Transitions\xe2\x80\xa6", this, [this, sourceName]() {
         onTransitionClicked(sourceName);
     });
+    menu.addAction("Copy Transitions", this, [this, sourceName]() {
+        onCopyTransitions(sourceName);
+    });
+    auto *pasteAct = menu.addAction("Paste Transitions", this, [this, sourceName]() {
+        onPasteTransitions(sourceName);
+    });
+    pasteAct->setEnabled(s_hasClipboard);
+    menu.addSeparator();
     menu.addAction("Set Color\xe2\x80\xa6", this, [this, sourceName]() {
         onSetColorClicked(sourceName);
     });
@@ -328,6 +350,29 @@ void DskDock::onSetColorClicked(const QString &sourceName)
     // Update the live button without a full refresh
     DskTimerButton *btn = findTimerButton(sourceName);
     if (btn) btn->setButtonColor(picked);
+}
+
+void DskDock::onCopyTransitions(const QString &sourceName)
+{
+    const DskTransitionConfig *cfg =
+        DskManager::instance().transitionConfig(sourceName.toStdString());
+    s_clipboardTransition = cfg ? *cfg : DskTransitionConfig{};
+    s_hasClipboard        = true;
+}
+
+void DskDock::onPasteTransitions(const QString &sourceName)
+{
+    if (!s_hasClipboard) return;
+    std::string sname = sourceName.toStdString();
+
+    // Carry over the target's existing button color — don't overwrite it
+    DskTransitionConfig cfg = s_clipboardTransition;
+    const DskTransitionConfig *existing =
+        DskManager::instance().transitionConfig(sname);
+    if (existing) cfg.buttonColor = existing->buttonColor;
+
+    DskManager::instance().setTransitionConfig(sname, cfg);
+    DskManager::instance().saveSettings();
 }
 
 void DskDock::onResetColorClicked(const QString &sourceName)

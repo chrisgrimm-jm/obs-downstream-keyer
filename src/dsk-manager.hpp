@@ -47,6 +47,9 @@ public:
     int  viewMode() const        { return m_viewMode; }
     void setViewMode(int mode)   { m_viewMode = mode; }
 
+    int  gridColumns() const     { return m_gridColumns; }
+    void setGridColumns(int n)   { m_gridColumns = std::max(2, std::min(n, 8)); }
+
     // ── Item enumeration ──────────────────────────────────────────────────────
     struct ItemInfo {
         std::string sourceName;
@@ -120,7 +123,8 @@ private:
     int         m_httpPort  = 4488;
 
     std::string m_dockState;
-    int         m_viewMode = 0; // 0 = list, 1 = grid
+    int         m_viewMode    = 0; // 0 = list, 1 = grid
+    int         m_gridColumns = 4;
 
     // Per-source auto-hide timer sequence numbers (incremented to cancel pending timers)
     std::unordered_map<std::string, uint64_t> m_timerSeq;
