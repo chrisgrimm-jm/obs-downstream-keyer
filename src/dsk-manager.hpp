@@ -110,9 +110,6 @@ private:
     static void cbSourceRename(void *data, calldata_t *cd);
     static void cbHotkeyToggle(void *data, obs_hotkey_id id, obs_hotkey_t *hk, bool pressed);
 
-    void connectSourceRenameSignal(obs_source_t *src);
-    void disconnectSourceRenameSignal(obs_source_t *src);
-
     struct HotkeyCtx {
         DskManager *mgr;
         std::string name;
