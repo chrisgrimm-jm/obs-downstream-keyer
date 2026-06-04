@@ -87,26 +87,6 @@ void DskTimerButton::mouseMoveEvent(QMouseEvent *e)
     QPushButton::mouseMoveEvent(e);
 }
 
-int DskTimerButton::heightForWidth(int w) const
-{
-    QFont f = font();
-    f.setPointSize(m_gridMode ? 10 : 12);
-    QFontMetrics fm(f);
-    int pad = m_gridMode ? 4 : 8;
-    int availW = std::max(w - 2 * pad, 20);
-    QRect br = fm.boundingRect(QRect(0, 0, availW, 9999),
-        Qt::TextWrapAnywhere | (m_gridMode ? Qt::AlignCenter : Qt::AlignLeft),
-        text());
-    // add vertical padding (8px top + 8px bottom) and enforce a sensible minimum
-    return std::max(br.height() + 16, m_gridMode ? 44 : 36);
-}
-
-QSize DskTimerButton::sizeHint() const
-{
-    int w = width() > 0 ? width() : (m_gridMode ? 80 : 200);
-    return QSize(w, heightForWidth(w));
-}
-
 float DskTimerButton::progress() const
 {
     if (!m_active)   return 0.0f;
@@ -162,8 +142,8 @@ void DskTimerButton::paintEvent(QPaintEvent *)
     f.setBold(m_active);
     p.setFont(f);
     p.setPen(m_active ? QColor("#fff") : QColor("#aaa"));
-    int textFlags = m_gridMode ? (Qt::AlignCenter    | Qt::TextWrapAnywhere)
-                               : (Qt::AlignVCenter | Qt::AlignLeft | Qt::TextWrapAnywhere);
+    int textFlags = m_gridMode ? Qt::AlignCenter
+                               : (Qt::AlignVCenter | Qt::AlignLeft);
     int pad = m_gridMode ? 4 : 8;
-    p.drawText(rect().adjusted(pad, 4, -pad, -4), textFlags, text());
+    p.drawText(rect().adjusted(pad, 0, -pad, 0), textFlags, text());
 }

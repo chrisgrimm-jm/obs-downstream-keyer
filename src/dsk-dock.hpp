@@ -7,7 +7,6 @@
 #include <QScrollArea>
 #include <QLabel>
 #include <QPushButton>
-#include <QTimer>
 #include <QString>
 #include <string>
 
@@ -36,8 +35,6 @@ private slots:
 
 protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
-    void resizeEvent(QResizeEvent *e) override;
-    void showEvent(QShowEvent *e) override;
 
 private:
     void buildUI();
@@ -50,13 +47,12 @@ private:
     void            updateDropIndicator(const QPoint &posInContainer);
     void            hideDropIndicator();
 
-    ViewMode     m_viewMode        = ViewMode::List;
-    int          m_dropIndex       = -1;
+    ViewMode     m_viewMode       = ViewMode::List;
+    int          m_dropIndex      = -1;
 
-    QLabel       *m_sceneLabel     = nullptr;
-    QPushButton  *m_viewToggle     = nullptr;
-    QScrollArea  *m_scroll         = nullptr;
-    QWidget      *m_itemContainer  = nullptr;
-    QWidget      *m_dropIndicator  = nullptr;
-    QTimer       *m_resizeDebounce = nullptr;
+    QLabel       *m_sceneLabel    = nullptr;
+    QPushButton  *m_viewToggle    = nullptr;
+    QScrollArea  *m_scroll        = nullptr;
+    QWidget      *m_itemContainer = nullptr;
+    QWidget      *m_dropIndicator = nullptr;
 };

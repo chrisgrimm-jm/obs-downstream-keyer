@@ -52,9 +52,7 @@ Each item is completely independent. You can have Sponsor A live during segment 
 ### Dock Controls
 Each source in your DSK scene gets its own toggle button in the dock. **Green always means live/on-air.** When a source is off, the button shows in its assigned color (default dark gray).
 
-Use the toggle icon in the dock header to switch between **list view** (one row per item with a T button) and **grid view** (compact grid, good for large collections). The number of grid columns (2–8, default 4) can be changed in **Settings → Grid view columns**. Buttons have a minimum width of 50 px per column so text is always readable.
-
-Long source names wrap inside the button automatically — the button height adjusts to fit the text at whatever column width is set.
+Use the toggle icon in the dock header to switch between **list view** (one row per item with a T button) and **grid view** (compact grid, good for large collections). The number of grid columns (2–8, default 4) can be changed in **Settings → Grid view columns**.
 
 ### Color-Coded Buttons
 Right-click any button and choose **Set Color…** to assign a custom color for when that source is off-air. Use this to visually identify items at a glance — red for lower thirds, blue for sponsor bugs, etc. The button always turns solid green when live regardless of its assigned color. Choose **Reset to Default Color** to go back to the standard dark gray.
