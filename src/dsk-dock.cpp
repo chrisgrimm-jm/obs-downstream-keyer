@@ -17,6 +17,9 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QMimeData>
+#include <QResizeEvent>
+#include <QShowEvent>
+#include <QTimer>
 #include <algorithm>
 
 // ── Transition clipboard (in-memory, session-only) ────────────────────────────
@@ -47,6 +50,16 @@ static const char *kSettingsBtn =
 DskDock::DskDock(QWidget *parent) : QWidget(parent)
 {
     m_viewMode = static_cast<ViewMode>(DskManager::instance().viewMode());
+
+    // Debounce grid refresh on dock resize so text wrap heights stay correct
+    m_resizeDebounce = new QTimer(this);
+    m_resizeDebounce->setSingleShot(true);
+    m_resizeDebounce->setInterval(120);
+    connect(m_resizeDebounce, &QTimer::timeout, this, [this]() {
+        if (m_viewMode == ViewMode::Grid)
+            QMetaObject::invokeMethod(this, "refresh", Qt::QueuedConnection);
+    });
+
     buildUI();
 
     auto &mgr = DskManager::instance();
@@ -125,8 +138,8 @@ void DskDock::buildListView(QVBoxLayout *layout)
         row->setSpacing(4);
 
         auto *toggleBtn = new DskTimerButton(sname, this);
-        toggleBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        toggleBtn->setMinimumHeight(44);
+        toggleBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        toggleBtn->setMinimumHeight(36);
         toggleBtn->setActive(item.visible);
 
         // Apply saved button color
@@ -186,11 +199,21 @@ void DskDock::buildGridView(QVBoxLayout *layout)
     auto  items = mgr.currentItems();
     if (items.empty()) return;
 
+    const int cols    = mgr.gridColumns();
+    const int spacing = 4;
+
+    // Compute how wide each button will be so we can pre-calculate the
+    // height needed to fit the wrapped text.  Use viewport width when
+    // available; fall back to the scroll area width.
+    int availW = m_scroll->viewport()->width();
+    if (availW <= 0) availW = m_scroll->width();
+    int btnW = (availW > 0) ? (availW - spacing * (cols - 1)) / cols : 80;
+    btnW = std::max(btnW, 28);
+
     auto *gridWidget = new QWidget();
     auto *grid       = new QGridLayout(gridWidget);
-    const int cols = DskManager::instance().gridColumns();
     grid->setContentsMargins(0, 0, 0, 0);
-    grid->setSpacing(4);
+    grid->setSpacing(spacing);
     for (int c = 0; c < cols; c++)
         grid->setColumnStretch(c, 1);
 
@@ -200,13 +223,17 @@ void DskDock::buildGridView(QVBoxLayout *layout)
 
         auto *btn = new DskTimerButton(sname, gridWidget);
         btn->setGridMode(true);
-        btn->setMinimumHeight(55);
         btn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+        // Explicitly set the height so text wraps correctly at the
+        // actual column width — don't rely on Qt's HFW layout chain.
+        int btnH = btn->heightForWidth(btnW);
+        btn->setFixedHeight(std::max(btnH, 28));
+
         btn->setActive(item.visible);
 
         // Apply saved button color
-        const DskTransitionConfig *cfg =
-            DskManager::instance().transitionConfig(item.sourceName);
+        const DskTransitionConfig *cfg = mgr.transitionConfig(item.sourceName);
         if (cfg && !cfg->buttonColor.empty())
             btn->setButtonColor(QColor(QString::fromStdString(cfg->buttonColor)));
 
@@ -214,7 +241,6 @@ void DskDock::buildGridView(QVBoxLayout *layout)
             onToggleClicked(sname);
         });
 
-        // Right-click → Configure transitions
         btn->setContextMenuPolicy(Qt::CustomContextMenu);
         connect(btn, &QWidget::customContextMenuRequested, this,
             [this, sname, btn](const QPoint &pos) {
@@ -411,6 +437,23 @@ void DskDock::onStateChanged(const QString &sourceName, bool active)
 void DskDock::scheduleRefresh()
 {
     QMetaObject::invokeMethod(this, "refresh", Qt::QueuedConnection);
+}
+
+// ── Grid resize handling ──────────────────────────────────────────────────────
+
+void DskDock::resizeEvent(QResizeEvent *e)
+{
+    QWidget::resizeEvent(e);
+    if (m_viewMode == ViewMode::Grid)
+        m_resizeDebounce->start();
+}
+
+void DskDock::showEvent(QShowEvent *e)
+{
+    QWidget::showEvent(e);
+    // Fire once the dock has a real pixel width so button heights are correct.
+    if (m_viewMode == ViewMode::Grid)
+        m_resizeDebounce->start();
 }
 
 // ── Drag-and-drop reordering ──────────────────────────────────────────────────

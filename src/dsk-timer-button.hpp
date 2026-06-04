@@ -25,6 +25,11 @@ public:
     // Pass an invalid QColor to reset to the default dark gray.
     void setButtonColor(const QColor &color);
 
+    QSize sizeHint() const override;
+    QSize minimumSizeHint() const override { return QSize(50, 20); }
+    bool  hasHeightForWidth() const override { return true; }
+    int   heightForWidth(int w) const override;
+
 protected:
     void paintEvent(QPaintEvent *) override;
     void mousePressEvent(QMouseEvent *e) override;

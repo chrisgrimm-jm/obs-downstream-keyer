@@ -7,6 +7,7 @@
 #include <QScrollArea>
 #include <QLabel>
 #include <QPushButton>
+#include <QTimer>
 #include <QString>
 #include <string>
 
@@ -35,6 +36,8 @@ private slots:
 
 protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
+    void resizeEvent(QResizeEvent *e) override;
+    void showEvent(QShowEvent *e) override;
 
 private:
     void buildUI();
@@ -55,4 +58,5 @@ private:
     QScrollArea  *m_scroll         = nullptr;
     QWidget      *m_itemContainer  = nullptr;
     QWidget      *m_dropIndicator  = nullptr;
+    QTimer       *m_resizeDebounce = nullptr;
 };
