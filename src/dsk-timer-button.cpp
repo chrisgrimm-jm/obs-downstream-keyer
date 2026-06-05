@@ -7,6 +7,8 @@
 #include <QPainter>
 #include <QPainterPath>
 
+bool DskTimerButton::s_dragActive = false;
+
 DskTimerButton::DskTimerButton(const QString &text, QWidget *parent)
     : QPushButton(text, parent)
 {
@@ -80,8 +82,11 @@ void DskTimerButton::mouseMoveEvent(QMouseEvent *e)
         drag->setPixmap(ghost);
         drag->setHotSpot(m_pressPos);
 
+        s_dragActive = true;
         drag->exec(Qt::MoveAction);
+        s_dragActive = false;
         m_dragging = false;
+        emit dragEnded(); // lets DskDock run any refresh it deferred during the drag
         return;
     }
     QPushButton::mouseMoveEvent(e);

@@ -139,6 +139,12 @@ void DskDock::buildListView(QVBoxLayout *layout)
         toggleBtn->setAcceptDrops(true);
         toggleBtn->installEventFilter(this);
 
+        // If refresh() was deferred while a drag was in progress, run it now
+        connect(toggleBtn, &DskTimerButton::dragEnded, this, [this]() {
+            if (m_pendingRefresh)
+                QMetaObject::invokeMethod(this, "refresh", Qt::QueuedConnection);
+        });
+
         connect(toggleBtn, &QPushButton::clicked, this, [this, sname]() {
             onToggleClicked(sname);
         });
@@ -217,6 +223,12 @@ void DskDock::buildGridView(QVBoxLayout *layout)
         btn->setAcceptDrops(true);
         btn->installEventFilter(this);
 
+        // If refresh() was deferred while a drag was in progress, run it now
+        connect(btn, &DskTimerButton::dragEnded, this, [this]() {
+            if (m_pendingRefresh)
+                QMetaObject::invokeMethod(this, "refresh", Qt::QueuedConnection);
+        });
+
         connect(btn, &QPushButton::clicked, this, [this, sname]() {
             onToggleClicked(sname);
         });
@@ -277,6 +289,15 @@ DskTimerButton *DskDock::findTimerButton(const QString &sourceName) const
 
 void DskDock::refresh()
 {
+    // A drag holds live pointers to buttons inside m_itemContainer.
+    // Deleting that widget mid-drag causes a crash (SIGSEGV on macOS,
+    // access violation on Windows). Defer and retry once the drag ends.
+    if (DskTimerButton::isDragActive()) {
+        m_pendingRefresh = true;
+        return;
+    }
+    m_pendingRefresh = false;
+
     auto &mgr = DskManager::instance();
     m_sceneLabel->setText(QString::fromStdString(mgr.sceneName()));
 

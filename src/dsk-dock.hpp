@@ -47,8 +47,9 @@ private:
     void            updateDropIndicator(const QPoint &posInContainer);
     void            hideDropIndicator();
 
-    ViewMode     m_viewMode       = ViewMode::List;
-    int          m_dropIndex      = -1;
+    ViewMode     m_viewMode        = ViewMode::List;
+    int          m_dropIndex       = -1;
+    bool         m_pendingRefresh  = false;
 
     QLabel       *m_sceneLabel    = nullptr;
     QPushButton  *m_viewToggle    = nullptr;

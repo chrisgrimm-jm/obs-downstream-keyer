@@ -25,6 +25,13 @@ public:
     // Pass an invalid QColor to reset to the default dark gray.
     void setButtonColor(const QColor &color);
 
+    // True while any DskTimerButton has an active QDrag::exec() in flight.
+    // DskDock::refresh() checks this to avoid deleting widgets mid-drag.
+    static bool isDragActive() { return s_dragActive; }
+
+Q_SIGNALS:
+    void dragEnded(); // emitted when QDrag::exec() returns
+
 protected:
     void paintEvent(QPaintEvent *) override;
     void mousePressEvent(QMouseEvent *e) override;
@@ -32,6 +39,8 @@ protected:
 
 private:
     float progress() const;
+
+    static bool   s_dragActive;  // shared across all buttons — only one drag at a time
 
     bool          m_active      = false;
     bool          m_gridMode    = false;
