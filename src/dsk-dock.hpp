@@ -31,6 +31,7 @@ private slots:
     void onPasteTransitions(const QString &sourceName);
     void onSettingsClicked();
     void onStateChanged(const QString &sourceName, bool active);
+    void onRenameClicked(const QString &sourceName);
     void onViewToggle();
 
 protected:

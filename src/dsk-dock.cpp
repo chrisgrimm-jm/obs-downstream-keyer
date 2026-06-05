@@ -13,6 +13,7 @@
 #include <QPushButton>
 #include <QMenu>
 #include <QColorDialog>
+#include <QInputDialog>
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
@@ -165,6 +166,10 @@ void DskDock::buildListView(QVBoxLayout *layout)
                 });
                 pasteAct->setEnabled(s_hasClipboard);
                 menu.addSeparator();
+                menu.addAction("Rename\xe2\x80\xa6", this, [this, sname]() {
+                    onRenameClicked(sname);
+                });
+                menu.addSeparator();
                 menu.addAction("Set Color\xe2\x80\xa6", this, [this, sname]() {
                     onSetColorClicked(sname);
                 });
@@ -260,6 +265,10 @@ void DskDock::onGridContextMenu(const QString &sourceName, const QPoint &globalP
         onPasteTransitions(sourceName);
     });
     pasteAct->setEnabled(s_hasClipboard);
+    menu.addSeparator();
+    menu.addAction("Rename\xe2\x80\xa6", this, [this, sourceName]() {
+        onRenameClicked(sourceName);
+    });
     menu.addSeparator();
     menu.addAction("Set Color\xe2\x80\xa6", this, [this, sourceName]() {
         onSetColorClicked(sourceName);
@@ -409,6 +418,22 @@ void DskDock::onResetColorClicked(const QString &sourceName)
 
     DskTimerButton *btn = findTimerButton(sourceName);
     if (btn) btn->setButtonColor(QColor()); // invalid color → resets to default dark gray
+}
+
+void DskDock::onRenameClicked(const QString &sourceName)
+{
+    bool ok;
+    QString newName = QInputDialog::getText(this, "Rename Source",
+                                            "New name:", QLineEdit::Normal,
+                                            sourceName, &ok);
+    newName = newName.trimmed();
+    if (!ok || newName.isEmpty() || newName == sourceName) return;
+
+    obs_source_t *src = obs_get_source_by_name(sourceName.toUtf8().constData());
+    if (!src) return;
+    obs_source_set_name(src, newName.toUtf8().constData());
+    obs_source_release(src);
+    // OBS fires source_rename → cbSourceRename re-keys maps + hotkeys + triggers refresh
 }
 
 void DskDock::onSettingsClicked()
