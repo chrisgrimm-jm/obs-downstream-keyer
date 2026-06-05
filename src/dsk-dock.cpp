@@ -135,6 +135,10 @@ void DskDock::buildListView(QVBoxLayout *layout)
         if (cfg && !cfg->buttonColor.empty())
             toggleBtn->setButtonColor(QColor(QString::fromStdString(cfg->buttonColor)));
 
+        // Let drag events on the button flow through our event filter
+        toggleBtn->setAcceptDrops(true);
+        toggleBtn->installEventFilter(this);
+
         connect(toggleBtn, &QPushButton::clicked, this, [this, sname]() {
             onToggleClicked(sname);
         });
@@ -208,6 +212,10 @@ void DskDock::buildGridView(QVBoxLayout *layout)
         const DskTransitionConfig *cfg = mgr.transitionConfig(item.sourceName);
         if (cfg && !cfg->buttonColor.empty())
             btn->setButtonColor(QColor(QString::fromStdString(cfg->buttonColor)));
+
+        // Let drag events on the button flow through our event filter
+        btn->setAcceptDrops(true);
+        btn->installEventFilter(this);
 
         connect(btn, &QPushButton::clicked, this, [this, sname]() {
             onToggleClicked(sname);
@@ -415,6 +423,46 @@ void DskDock::scheduleRefresh()
 
 bool DskDock::eventFilter(QObject *obj, QEvent *event)
 {
+    // ── Drag events on a button ───────────────────────────────────────────────
+    // Qt only delivers drag events to the topmost widget under the cursor.
+    // Buttons sit on top of m_itemContainer, so without this block drag events
+    // over buttons would never update the drop indicator.
+    if (auto *btn = qobject_cast<DskTimerButton *>(obj)) {
+        switch (event->type()) {
+        case QEvent::DragEnter: {
+            auto *e = static_cast<QDragEnterEvent *>(event);
+            if (e->mimeData()->hasFormat("application/x-dsk-source"))
+                e->acceptProposedAction();
+            return true;
+        }
+        case QEvent::DragMove: {
+            auto *e = static_cast<QDragMoveEvent *>(event);
+            if (!e->mimeData()->hasFormat("application/x-dsk-source")) break;
+            e->acceptProposedAction();
+            // Translate from button-local coords to container coords
+            updateDropIndicator(btn->mapTo(m_itemContainer, e->position().toPoint()));
+            return true;
+        }
+        case QEvent::DragLeave:
+            // Don't hide — cursor may be moving to the next button
+            return true;
+        case QEvent::Drop: {
+            auto *e = static_cast<QDropEvent *>(event);
+            if (!e->mimeData()->hasFormat("application/x-dsk-source")) break;
+            QString name = QString::fromUtf8(e->mimeData()->data("application/x-dsk-source"));
+            int idx = m_dropIndex;
+            hideDropIndicator();
+            e->acceptProposedAction();
+            if (idx >= 0)
+                DskManager::instance().reorderItem(name.toStdString(), idx);
+            return true;
+        }
+        default: break;
+        }
+        return QWidget::eventFilter(obj, event);
+    }
+
+    // ── Drag events on the container itself (gaps between buttons) ────────────
     if (obj != m_itemContainer)
         return QWidget::eventFilter(obj, event);
 
