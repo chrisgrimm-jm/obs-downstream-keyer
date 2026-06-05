@@ -31,6 +31,8 @@ void DskManager::shutdown()
     if (m_shutdown) return;
     m_shutdown = true;
 
+    obs_frontend_remove_event_callback(cbFrontendEvent, this);
+
     signal_handler_disconnect(obs_get_signal_handler(), "source_rename",
                               cbSourceRename, this);
 
@@ -454,59 +456,75 @@ void DskManager::cbSourceRename(void *data, calldata_t *cd)
 
 // ── Persistence ───────────────────────────────────────────────────────────────
 
-void DskManager::loadSettings()
+// Returns a sanitised file path for the current scene collection's settings.
+// Each collection gets its own file so switching collections loads the right DSK config.
+std::string DskManager::collectionConfigPath() const
 {
-    char *path = obs_module_config_path("settings.json");
-    obs_data_t *root = obs_data_create_from_json_file(path);
+    char *col = obs_frontend_get_current_scene_collection();
+    std::string name = col ? col : "default";
+    bfree(col);
+
+    // Replace anything that isn't alphanumeric, dash, or dot with underscore
+    for (char &c : name)
+        if (!std::isalnum((unsigned char)c) && c != '-' && c != '.')
+            c = '_';
+
+    std::string filename = "collection-" + name + ".json";
+    char *path = obs_module_config_path(filename.c_str());
+    std::string result = path;
     bfree(path);
+    return result;
+}
 
-    if (!root) return;
+// Loads DSK scene name + per-item transition/color configs for the active collection.
+// Falls back to the legacy settings.json if no collection file exists yet (migration).
+void DskManager::loadCollectionSettings()
+{
+    std::string colPath = collectionConfigPath();
+    obs_data_t *root    = obs_data_create_from_json_file(colPath.c_str());
 
-    const char *scene = obs_data_get_string(root, "dsk_scene");
-    if (scene && *scene) m_sceneName = scene;
-
-    m_httpPort = (int)obs_data_get_int(root, "http_port");
-    if (m_httpPort <= 0 || m_httpPort > 65535) m_httpPort = 4488;
-
-    const char *ds = obs_data_get_string(root, "dock_state");
-    if (ds) m_dockState = ds;
-
-    m_viewMode = (int)obs_data_get_int(root, "view_mode");
-
-    int gc = (int)obs_data_get_int(root, "grid_columns");
-    if (gc >= 2 && gc <= 8) m_gridColumns = gc;
-
-    obs_data_array_t *items = obs_data_get_array(root, "item_transitions");
-    if (items) {
-        size_t count = obs_data_array_count(items);
-        for (size_t i = 0; i < count; i++) {
-            obs_data_t *entry = obs_data_array_item(items, i);
-            const char *name = obs_data_get_string(entry, "source");
-            if (name && *name) {
-                DskTransitionConfig cfg;
-                const char *st = obs_data_get_string(entry, "show_type");
-                if (st) cfg.showType = st;
-                cfg.showDuration = (uint32_t)obs_data_get_int(entry, "show_dur");
-                const char *ss = obs_data_get_string(entry, "show_settings");
-                if (ss) cfg.showSettings = ss;
-                const char *ht = obs_data_get_string(entry, "hide_type");
-                if (ht) cfg.hideType = ht;
-                cfg.hideDuration = (uint32_t)obs_data_get_int(entry, "hide_dur");
-                const char *hs = obs_data_get_string(entry, "hide_settings");
-                if (hs) cfg.hideSettings = hs;
-                cfg.autoDuration = (uint32_t)obs_data_get_int(entry, "auto_dur");
-                const char *bc = obs_data_get_string(entry, "button_color");
-                if (bc) cfg.buttonColor = bc;
-                m_transitions[name] = cfg;
-            }
-            obs_data_release(entry);
-        }
-        obs_data_array_release(items);
+    // First-run migration: fall back to the old monolithic settings.json
+    if (!root) {
+        char *legacy = obs_module_config_path("settings.json");
+        root = obs_data_create_from_json_file(legacy);
+        bfree(legacy);
     }
 
-    obs_data_release(root);
+    if (root) {
+        const char *scene = obs_data_get_string(root, "dsk_scene");
+        if (scene && *scene) m_sceneName = scene;
 
-    // Connect to the DSK scene and register hotkeys
+        obs_data_array_t *items = obs_data_get_array(root, "item_transitions");
+        if (items) {
+            size_t count = obs_data_array_count(items);
+            for (size_t i = 0; i < count; i++) {
+                obs_data_t *entry = obs_data_array_item(items, i);
+                const char *name  = obs_data_get_string(entry, "source");
+                if (name && *name) {
+                    DskTransitionConfig cfg;
+                    const char *st = obs_data_get_string(entry, "show_type");
+                    if (st) cfg.showType = st;
+                    cfg.showDuration = (uint32_t)obs_data_get_int(entry, "show_dur");
+                    const char *ss = obs_data_get_string(entry, "show_settings");
+                    if (ss) cfg.showSettings = ss;
+                    const char *ht = obs_data_get_string(entry, "hide_type");
+                    if (ht) cfg.hideType = ht;
+                    cfg.hideDuration = (uint32_t)obs_data_get_int(entry, "hide_dur");
+                    const char *hs = obs_data_get_string(entry, "hide_settings");
+                    if (hs) cfg.hideSettings = hs;
+                    cfg.autoDuration = (uint32_t)obs_data_get_int(entry, "auto_dur");
+                    const char *bc = obs_data_get_string(entry, "button_color");
+                    if (bc) cfg.buttonColor = bc;
+                    m_transitions[name] = cfg;
+                }
+                obs_data_release(entry);
+            }
+            obs_data_array_release(items);
+        }
+        obs_data_release(root);
+    }
+
+    // Connect to the DSK scene for this collection and register hotkeys
     obs_source_t *src = obs_get_source_by_name(m_sceneName.c_str());
     if (src) {
         connectSceneSignals(src);
@@ -514,39 +532,30 @@ void DskManager::loadSettings()
     }
     registerHotkeys();
 
-    // Global rename hook — catches all source renames regardless of timing
-    signal_handler_connect(obs_get_signal_handler(), "source_rename",
-                           cbSourceRename, this);
-
-    // Apply saved transitions to any existing items
-    obs_scene_t *scene2 = dskScene();
-    if (scene2) {
-        obs_scene_enum_items(scene2,
+    // Re-apply saved transitions to any items already in the scene
+    obs_scene_t *scene = dskScene();
+    if (scene) {
+        obs_scene_enum_items(scene,
             [](obs_scene_t *, obs_sceneitem_t *item, void *param) -> bool {
                 auto *mgr = static_cast<DskManager *>(param);
-                obs_source_t *src = obs_sceneitem_get_source(item);
-                if (src) {
-                    const char *n = obs_source_get_name(src);
-                    if (n) mgr->applyTransitions(n);
-                }
+                obs_source_t *s = obs_sceneitem_get_source(item);
+                if (s) { const char *n = obs_source_get_name(s); if (n) mgr->applyTransitions(n); }
                 return true;
-            },
-            this);
+            }, this);
     }
 }
 
-void DskManager::saveSettings()
+// Saves DSK scene name + per-item configs for the active collection.
+void DskManager::saveCollectionSettings()
 {
     char *dir = obs_module_config_path("");
     os_mkdirs(dir);
     bfree(dir);
 
+    std::string colPath = collectionConfigPath();
+
     obs_data_t *root = obs_data_create();
     obs_data_set_string(root, "dsk_scene", m_sceneName.c_str());
-    obs_data_set_int(root, "http_port", m_httpPort);
-    obs_data_set_string(root, "dock_state",   m_dockState.c_str());
-    obs_data_set_int(root,    "view_mode",    m_viewMode);
-    obs_data_set_int(root,    "grid_columns", m_gridColumns);
 
     obs_data_array_t *items = obs_data_array_create();
     for (const auto &[name, cfg] : m_transitions) {
@@ -566,8 +575,88 @@ void DskManager::saveSettings()
     obs_data_set_array(root, "item_transitions", items);
     obs_data_array_release(items);
 
-    char *path = obs_module_config_path("settings.json");
-    obs_data_save_json_safe(root, path, "tmp", "bak");
-    bfree(path);
+    obs_data_save_json_safe(root, colPath.c_str(), "tmp", "bak");
     obs_data_release(root);
+}
+
+void DskManager::cbFrontendEvent(enum obs_frontend_event event, void *data)
+{
+    auto *mgr = static_cast<DskManager *>(data);
+    if (mgr->m_shutdown) return;
+
+    if (event == OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGING) {
+        // Save the outgoing collection before OBS unloads it
+        mgr->saveCollectionSettings();
+
+        // Disconnect from the scene that's about to disappear
+        obs_source_t *src = obs_get_source_by_name(mgr->m_sceneName.c_str());
+        if (src) { mgr->disconnectSceneSignals(src); obs_source_release(src); }
+        mgr->unregisterAllHotkeys();
+
+        // Clear per-collection state ready for the incoming collection
+        mgr->m_transitions.clear();
+        mgr->m_timerSeq.clear();
+        mgr->m_expiryTime.clear();
+        mgr->m_sceneName = "[DSK Layer]";
+
+    } else if (event == OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED) {
+        // Load settings for the newly active collection
+        mgr->loadCollectionSettings();
+        if (mgr->m_refreshCb) mgr->m_refreshCb();
+    }
+}
+
+void DskManager::loadSettings()
+{
+    // ── Global preferences (shared across all collections) ────────────────────
+    char *path = obs_module_config_path("settings.json");
+    obs_data_t *root = obs_data_create_from_json_file(path);
+    bfree(path);
+
+    if (root) {
+        m_httpPort = (int)obs_data_get_int(root, "http_port");
+        if (m_httpPort <= 0 || m_httpPort > 65535) m_httpPort = 4488;
+
+        const char *ds = obs_data_get_string(root, "dock_state");
+        if (ds) m_dockState = ds;
+
+        m_viewMode = (int)obs_data_get_int(root, "view_mode");
+
+        int gc = (int)obs_data_get_int(root, "grid_columns");
+        if (gc >= 2 && gc <= 8) m_gridColumns = gc;
+
+        obs_data_release(root);
+    }
+
+    // ── Per-collection settings for the currently active collection ───────────
+    loadCollectionSettings();
+
+    // Global rename hook
+    signal_handler_connect(obs_get_signal_handler(), "source_rename",
+                           cbSourceRename, this);
+
+    // Scene-collection change hook
+    obs_frontend_add_event_callback(cbFrontendEvent, this);
+}
+
+void DskManager::saveSettings()
+{
+    char *dir = obs_module_config_path("");
+    os_mkdirs(dir);
+    bfree(dir);
+
+    // ── Global preferences ────────────────────────────────────────────────────
+    obs_data_t *root = obs_data_create();
+    obs_data_set_int(root, "http_port",    m_httpPort);
+    obs_data_set_string(root, "dock_state",   m_dockState.c_str());
+    obs_data_set_int(root,    "view_mode",    m_viewMode);
+    obs_data_set_int(root,    "grid_columns", m_gridColumns);
+
+    char *gpath = obs_module_config_path("settings.json");
+    obs_data_save_json_safe(root, gpath, "tmp", "bak");
+    bfree(gpath);
+    obs_data_release(root);
+
+    // ── Per-collection settings ───────────────────────────────────────────────
+    saveCollectionSettings();
 }

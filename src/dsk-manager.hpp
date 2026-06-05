@@ -1,6 +1,7 @@
 #pragma once
 
 #include <obs-module.h>
+#include <obs-frontend-api.h>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -108,7 +109,13 @@ private:
     static void cbItemAdd(void *data, calldata_t *cd);
     static void cbItemRemove(void *data, calldata_t *cd);
     static void cbSourceRename(void *data, calldata_t *cd);
+    static void cbFrontendEvent(enum obs_frontend_event event, void *data);
     static void cbHotkeyToggle(void *data, obs_hotkey_id id, obs_hotkey_t *hk, bool pressed);
+
+    // Per-collection persistence helpers
+    std::string collectionConfigPath() const;
+    void        loadCollectionSettings();
+    void        saveCollectionSettings();
 
     struct HotkeyCtx {
         DskManager *mgr;
