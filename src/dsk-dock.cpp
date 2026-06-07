@@ -161,7 +161,17 @@ void DskDock::buildListView(QVBoxLayout *layout)
                 menu.addAction("Copy Transitions", this, [this, sname]() {
                     onCopyTransitions(sname);
                 });
-                auto *pasteAct = menu.addAction("Paste Transitions", this, [this, sname]() {
+                QString pasteLabel = "Paste Transitions";
+                if (s_hasClipboard) {
+                    QString show = s_clipboardTransition.showType.empty() ? "none"
+                        : QString::fromStdString(s_clipboardTransition.showType)
+                              .replace("_transition", "", Qt::CaseInsensitive);
+                    QString hide = s_clipboardTransition.hideType.empty() ? "none"
+                        : QString::fromStdString(s_clipboardTransition.hideType)
+                              .replace("_transition", "", Qt::CaseInsensitive);
+                    pasteLabel += " (" + show + " / " + hide + ")";
+                }
+                auto *pasteAct = menu.addAction(pasteLabel, this, [this, sname]() {
                     onPasteTransitions(sname);
                 });
                 pasteAct->setEnabled(s_hasClipboard);
@@ -261,7 +271,17 @@ void DskDock::onGridContextMenu(const QString &sourceName, const QPoint &globalP
     menu.addAction("Copy Transitions", this, [this, sourceName]() {
         onCopyTransitions(sourceName);
     });
-    auto *pasteAct = menu.addAction("Paste Transitions", this, [this, sourceName]() {
+    QString pasteLabel = "Paste Transitions";
+    if (s_hasClipboard) {
+        QString show = s_clipboardTransition.showType.empty() ? "none"
+            : QString::fromStdString(s_clipboardTransition.showType)
+                  .replace("_transition", "", Qt::CaseInsensitive);
+        QString hide = s_clipboardTransition.hideType.empty() ? "none"
+            : QString::fromStdString(s_clipboardTransition.hideType)
+                  .replace("_transition", "", Qt::CaseInsensitive);
+        pasteLabel += " (" + show + " / " + hide + ")";
+    }
+    auto *pasteAct = menu.addAction(pasteLabel, this, [this, sourceName]() {
         onPasteTransitions(sourceName);
     });
     pasteAct->setEnabled(s_hasClipboard);
@@ -392,7 +412,17 @@ void DskDock::onCopyTransitions(const QString &sourceName)
 {
     const DskTransitionConfig *cfg =
         DskManager::instance().transitionConfig(sourceName.toStdString());
-    s_clipboardTransition = cfg ? *cfg : DskTransitionConfig{};
+
+    if (!cfg || (cfg->showType.empty() && cfg->hideType.empty())) {
+        // Nothing meaningful to copy — tell the operator so they're not confused
+        QMenu info(this);
+        info.addAction("No transitions configured on this item")->setEnabled(false);
+        // Show briefly at the cursor position
+        info.exec(QCursor::pos());
+        return;
+    }
+
+    s_clipboardTransition = *cfg;
     s_hasClipboard        = true;
 }
 

@@ -213,8 +213,19 @@ void DskItemSettings::buildUI()
 
 void DskItemSettings::onShowTypeChanged(int)
 {
-    if (m_showTransSrc) { obs_source_release(m_showTransSrc); m_showTransSrc = nullptr; }
     QString typeId = m_showTypeCb->currentData().toString();
+
+    // If the type hasn't actually changed, keep the existing source and its settings.
+    if (m_showTransSrc) {
+        const char *currentId = obs_source_get_id(m_showTransSrc);
+        if (currentId && typeId == QString::fromUtf8(currentId)) {
+            m_showConfigBtn->setEnabled(true);
+            return;
+        }
+        obs_source_release(m_showTransSrc);
+        m_showTransSrc = nullptr;
+    }
+
     if (!typeId.isEmpty())
         m_showTransSrc = createTempSource(typeId, "");
     m_showConfigBtn->setEnabled(m_showTransSrc != nullptr);
@@ -222,8 +233,19 @@ void DskItemSettings::onShowTypeChanged(int)
 
 void DskItemSettings::onHideTypeChanged(int)
 {
-    if (m_hideTransSrc) { obs_source_release(m_hideTransSrc); m_hideTransSrc = nullptr; }
     QString typeId = m_hideTypeCb->currentData().toString();
+
+    // If the type hasn't actually changed, keep the existing source and its settings.
+    if (m_hideTransSrc) {
+        const char *currentId = obs_source_get_id(m_hideTransSrc);
+        if (currentId && typeId == QString::fromUtf8(currentId)) {
+            m_hideConfigBtn->setEnabled(true);
+            return;
+        }
+        obs_source_release(m_hideTransSrc);
+        m_hideTransSrc = nullptr;
+    }
+
     if (!typeId.isEmpty())
         m_hideTransSrc = createTempSource(typeId, "");
     m_hideConfigBtn->setEnabled(m_hideTransSrc != nullptr);
