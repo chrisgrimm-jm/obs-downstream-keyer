@@ -239,6 +239,87 @@ void DskManager::applyTransitions(const std::string &sourceName)
     }
 }
 
+// ── Playlist ──────────────────────────────────────────────────────────────────
+
+void DskManager::setPlaylist(std::vector<PlaylistEntry> entries)
+{
+    m_playlist = std::move(entries);
+}
+
+void DskManager::startPlaylist()
+{
+    if (m_playlist.empty()) return;
+    m_playlistRunning = true;
+    m_playlistInGap   = false;
+    m_playlistIndex   = 0;
+    ++m_playlistSeq;
+    schedulePlaylistStep();
+}
+
+void DskManager::stopPlaylist()
+{
+    ++m_playlistSeq;
+    if (m_playlistRunning && !m_playlistInGap && m_playlistIndex >= 0
+        && m_playlistIndex < (int)m_playlist.size()) {
+        deactivate(m_playlist[m_playlistIndex].sourceName);
+    }
+    m_playlistRunning = false;
+    if (m_refreshCb) m_refreshCb();
+}
+
+void DskManager::schedulePlaylistStep()
+{
+    if (!m_playlistRunning) return;
+    if (m_playlistIndex < 0 || m_playlistIndex >= (int)m_playlist.size()) {
+        m_playlistRunning = false;
+        if (m_refreshCb) m_refreshCb();
+        return;
+    }
+
+    const PlaylistEntry &entry = m_playlist[m_playlistIndex];
+    uint64_t seq = m_playlistSeq;
+
+    if (!m_playlistInGap) {
+        activate(entry.sourceName);
+        uint32_t ms = entry.onDuration * 1000;
+        m_playlistStepExpiry = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
+        if (m_refreshCb) m_refreshCb();
+        QTimer::singleShot((int)ms, QCoreApplication::instance(),
+            [this, seq, entry]() {
+                if (m_playlistSeq != seq) return;
+                deactivate(entry.sourceName);
+                m_playlistInGap = true;
+                schedulePlaylistStep();
+            });
+    } else {
+        uint32_t ms = entry.offDuration * 1000;
+        m_playlistStepExpiry = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
+        if (m_refreshCb) m_refreshCb();
+        QTimer::singleShot((int)ms, QCoreApplication::instance(),
+            [this, seq]() {
+                if (m_playlistSeq != seq) return;
+                m_playlistInGap = false;
+                m_playlistIndex = (m_playlistIndex + 1) % (int)m_playlist.size();
+                schedulePlaylistStep();
+            });
+    }
+}
+
+DskManager::PlaylistStatus DskManager::playlistStatus() const
+{
+    PlaylistStatus s;
+    s.running = m_playlistRunning;
+    if (!m_playlistRunning) return s;
+    s.inGap = m_playlistInGap;
+    s.index = m_playlistIndex;
+    if (m_playlistIndex >= 0 && m_playlistIndex < (int)m_playlist.size())
+        s.sourceName = m_playlist[m_playlistIndex].sourceName;
+    double rem = std::chrono::duration<double>(
+        m_playlistStepExpiry - std::chrono::steady_clock::now()).count();
+    s.secondsLeft = rem < 0.0 ? 0.0 : rem;
+    return s;
+}
+
 // ── Reorder ───────────────────────────────────────────────────────────────────
 
 void DskManager::reorderItem(const std::string &sourceName, int newIndex)
@@ -521,6 +602,26 @@ void DskManager::loadCollectionSettings()
             }
             obs_data_array_release(items);
         }
+        obs_data_array_t *playlist = obs_data_get_array(root, "sponsor_playlist");
+        if (playlist) {
+            size_t count = obs_data_array_count(playlist);
+            for (size_t i = 0; i < count; i++) {
+                obs_data_t *e = obs_data_array_item(playlist, i);
+                const char *src = obs_data_get_string(e, "source");
+                if (src && *src) {
+                    PlaylistEntry pe;
+                    pe.sourceName  = src;
+                    pe.onDuration  = (uint32_t)obs_data_get_int(e, "on_dur");
+                    pe.offDuration = (uint32_t)obs_data_get_int(e, "off_dur");
+                    if (pe.onDuration  == 0) pe.onDuration  = 30;
+                    if (pe.offDuration == 0) pe.offDuration = 10;
+                    m_playlist.push_back(pe);
+                }
+                obs_data_release(e);
+            }
+            obs_data_array_release(playlist);
+        }
+
         obs_data_release(root);
     }
 
@@ -575,6 +676,18 @@ void DskManager::saveCollectionSettings()
     obs_data_set_array(root, "item_transitions", items);
     obs_data_array_release(items);
 
+    obs_data_array_t *playlist = obs_data_array_create();
+    for (const auto &pe : m_playlist) {
+        obs_data_t *e = obs_data_create();
+        obs_data_set_string(e, "source",  pe.sourceName.c_str());
+        obs_data_set_int(e,    "on_dur",  pe.onDuration);
+        obs_data_set_int(e,    "off_dur", pe.offDuration);
+        obs_data_array_push_back(playlist, e);
+        obs_data_release(e);
+    }
+    obs_data_set_array(root, "sponsor_playlist", playlist);
+    obs_data_array_release(playlist);
+
     obs_data_save_json_safe(root, colPath.c_str(), "tmp", "bak");
     obs_data_release(root);
 }
@@ -586,6 +699,7 @@ void DskManager::cbFrontendEvent(enum obs_frontend_event event, void *data)
 
     if (event == OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGING) {
         // Save the outgoing collection before OBS unloads it
+        mgr->stopPlaylist();
         mgr->saveCollectionSettings();
 
         // Disconnect from the scene that's about to disappear
@@ -597,6 +711,7 @@ void DskManager::cbFrontendEvent(enum obs_frontend_event event, void *data)
         mgr->m_transitions.clear();
         mgr->m_timerSeq.clear();
         mgr->m_expiryTime.clear();
+        mgr->m_playlist.clear();
         mgr->m_sceneName = "[DSK Layer]";
 
     } else if (event == OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED) {

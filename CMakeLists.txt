@@ -42,6 +42,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
   src/dsk-item-settings.cpp
   src/dsk-settings.cpp
   src/companion-server.cpp
+  src/dsk-playlist-dialog.cpp
 )
 
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})

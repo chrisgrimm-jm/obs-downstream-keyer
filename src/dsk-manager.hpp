@@ -9,6 +9,12 @@
 #include <cstdint>
 #include <chrono>
 
+struct PlaylistEntry {
+    std::string sourceName;
+    uint32_t    onDuration  = 30;
+    uint32_t    offDuration = 10;
+};
+
 // Per-source show/hide transition config.
 // When set, the manager applies these to the scene item so that toggling
 // visibility uses the configured transition (including obs-move).
@@ -81,6 +87,22 @@ public:
     // Reorder a source to newIndex (0 = first in dock) within the DSK scene.
     void reorderItem(const std::string &sourceName, int newIndex);
 
+    // ── Playlist ──────────────────────────────────────────────────────────────
+    const std::vector<PlaylistEntry> &playlist() const { return m_playlist; }
+    void setPlaylist(std::vector<PlaylistEntry> entries);
+    void startPlaylist();
+    void stopPlaylist();
+    bool isPlaylistRunning() const { return m_playlistRunning; }
+
+    struct PlaylistStatus {
+        bool        running     = false;
+        bool        inGap       = false;
+        int         index       = -1;
+        std::string sourceName;
+        double      secondsLeft = 0.0;
+    };
+    PlaylistStatus playlistStatus() const;
+
     // ── Setup helper ──────────────────────────────────────────────────────────
     // Nests the DSK scene at the top of every other scene in the collection
     void addDskToAllScenes();
@@ -117,6 +139,8 @@ private:
     void        loadCollectionSettings();
     void        saveCollectionSettings();
 
+    void schedulePlaylistStep();
+
     struct HotkeyCtx {
         DskManager *mgr;
         std::string name;
@@ -143,6 +167,13 @@ private:
 
     std::unordered_map<std::string, DskTransitionConfig> m_transitions;
     std::vector<HotkeyEntry>                             m_hotkeys;
+
+    std::vector<PlaylistEntry> m_playlist;
+    bool     m_playlistRunning = false;
+    bool     m_playlistInGap   = false;
+    int      m_playlistIndex   = 0;
+    uint64_t m_playlistSeq     = 0;
+    std::chrono::steady_clock::time_point m_playlistStepExpiry;
 
     RefreshCallback m_refreshCb;
     StateCallback   m_stateCb;

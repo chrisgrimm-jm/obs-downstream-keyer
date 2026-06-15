@@ -2,6 +2,7 @@
 #include "dsk-manager.hpp"
 #include "dsk-item-settings.hpp"
 #include "dsk-settings.hpp"
+#include "dsk-playlist-dialog.hpp"
 
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -88,12 +89,39 @@ void DskDock::buildUI()
     connect(m_viewToggle, &QPushButton::clicked, this, &DskDock::onViewToggle);
     topBar->addWidget(m_viewToggle);
 
+    auto *playlistBtn = new QPushButton("Playlist\xe2\x80\xa6");
+    playlistBtn->setStyleSheet(kSettingsBtn);
+    playlistBtn->setFixedHeight(22);
+    connect(playlistBtn, &QPushButton::clicked, this, &DskDock::onPlaylistClicked);
+    topBar->addWidget(playlistBtn);
+
     auto *settingsBtn = new QPushButton("Settings");
     settingsBtn->setStyleSheet(kSettingsBtn);
     settingsBtn->setFixedHeight(22);
     connect(settingsBtn, &QPushButton::clicked, this, &DskDock::onSettingsClicked);
     topBar->addWidget(settingsBtn);
     root->addLayout(topBar);
+
+    // ── Playlist bar ──────────────────────────────────────────────────────────
+    auto *playlistBar = new QHBoxLayout();
+    playlistBar->setContentsMargins(0, 0, 0, 0);
+    playlistBar->setSpacing(4);
+
+    m_playlistToggleBtn = new QPushButton("\xe2\x96\xb6 Start");
+    m_playlistToggleBtn->setStyleSheet(kSettingsBtn);
+    m_playlistToggleBtn->setFixedHeight(22);
+    connect(m_playlistToggleBtn, &QPushButton::clicked, this, &DskDock::onPlaylistToggle);
+    playlistBar->addWidget(m_playlistToggleBtn);
+
+    m_playlistStatusLabel = new QLabel("Stopped");
+    m_playlistStatusLabel->setStyleSheet("color: #444; font-size: 10px;");
+    playlistBar->addWidget(m_playlistStatusLabel);
+    playlistBar->addStretch();
+    root->addLayout(playlistBar);
+
+    m_playlistTicker = new QTimer(this);
+    m_playlistTicker->setInterval(1000);
+    connect(m_playlistTicker, &QTimer::timeout, this, &DskDock::onPlaylistTick);
 
     // ── Scrollable item list ──────────────────────────────────────────────────
     m_scroll = new QScrollArea();
@@ -329,6 +357,7 @@ void DskDock::refresh()
 
     auto &mgr = DskManager::instance();
     m_sceneLabel->setText(QString::fromStdString(mgr.sceneName()));
+    updatePlaylistBar();
 
     delete m_itemContainer;
     m_itemContainer = new QWidget();
@@ -472,6 +501,57 @@ void DskDock::onSettingsClicked()
     if (dlg.exec() == QDialog::Accepted) {
         DskManager::instance().saveSettings();
         refresh();
+    }
+}
+
+void DskDock::onPlaylistClicked()
+{
+    auto *dlg = new DskPlaylistDialog(this);
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dlg, &QDialog::accepted, this, [this]() { refresh(); });
+    dlg->show();
+}
+
+void DskDock::onPlaylistToggle()
+{
+    auto &mgr = DskManager::instance();
+    if (mgr.isPlaylistRunning()) {
+        mgr.stopPlaylist();
+        m_playlistTicker->stop();
+        updatePlaylistBar();
+    } else {
+        mgr.startPlaylist();
+        m_playlistTicker->start();
+        updatePlaylistBar();
+    }
+}
+
+void DskDock::onPlaylistTick()
+{
+    updatePlaylistBar();
+    if (!DskManager::instance().isPlaylistRunning())
+        m_playlistTicker->stop();
+}
+
+void DskDock::updatePlaylistBar()
+{
+    auto s = DskManager::instance().playlistStatus();
+    if (!s.running) {
+        m_playlistToggleBtn->setText("\xe2\x96\xb6 Start");
+        m_playlistStatusLabel->setText("Stopped");
+        m_playlistStatusLabel->setStyleSheet("color: #444; font-size: 10px;");
+    } else if (s.inGap) {
+        m_playlistToggleBtn->setText("\xe2\x96\xa0 Stop");
+        m_playlistStatusLabel->setText(
+            QString("Gap  %1").arg(fmtTime((int)s.secondsLeft)));
+        m_playlistStatusLabel->setStyleSheet("color: #666; font-size: 10px;");
+    } else {
+        m_playlistToggleBtn->setText("\xe2\x96\xa0 Stop");
+        m_playlistStatusLabel->setText(
+            QString("\xe2\x97\x8f %1  %2")
+                .arg(QString::fromStdString(s.sourceName))
+                .arg(fmtTime((int)s.secondsLeft)));
+        m_playlistStatusLabel->setStyleSheet("color: #2ecc71; font-size: 10px;");
     }
 }
 
