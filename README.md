@@ -95,6 +95,8 @@ When an item has an active auto-hide countdown, the response includes `timeRemai
 
 Items without a countdown omit the field entirely.
 
+A native Bitfocus Companion module is also available at [github.com/chrisgrimm-jm/companion-module-jomboy-dsk](https://github.com/chrisgrimm-jm/companion-module-jomboy-dsk). Note: this module is still experimental.
+
 ---
 
 ## Requirements
