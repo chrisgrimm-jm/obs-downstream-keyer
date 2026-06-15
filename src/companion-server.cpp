@@ -3,6 +3,9 @@
 
 #include <QTcpSocket>
 #include <QUrl>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
 
 CompanionServer *g_companionServer = nullptr;
 
@@ -51,7 +54,11 @@ void CompanionServer::onReadyRead()
     QByteArray data = sock->readAll();
     if (data.isEmpty()) return;
     auto [method, path] = parseRequestLine(data);
-    handleRequest(sock, method, path);
+    // Extract body — everything after the blank header line
+    QByteArray body;
+    int sep = data.indexOf("\r\n\r\n");
+    if (sep >= 0) body = data.mid(sep + 4);
+    handleRequest(sock, method, path, body);
 }
 
 void CompanionServer::onClientDisconnected()
@@ -79,7 +86,8 @@ CompanionServer::RequestLine CompanionServer::parseRequestLine(const QByteArray 
  */
 void CompanionServer::handleRequest(QTcpSocket *sock,
                                     const QString &method,
-                                    const QString &path)
+                                    const QString &path,
+                                    const QByteArray &/*body*/)
 {
     auto &mgr = DskManager::instance();
 

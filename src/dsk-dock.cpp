@@ -301,8 +301,8 @@ void DskDock::onGridContextMenu(const QString &sourceName, const QPoint &globalP
 
 void DskDock::updateViewToggleIcon()
 {
-    // Show the icon of the mode you'll switch TO when clicked
-    m_viewToggle->setText(m_viewMode == ViewMode::List ? "\xe2\x8a\x9e" : "\xe2\x98\xb0");
+    // Show the mode you'll switch TO when clicked
+    m_viewToggle->setText(m_viewMode == ViewMode::List ? "Grid" : "List");
 }
 
 DskTimerButton *DskDock::findTimerButton(const QString &sourceName) const
