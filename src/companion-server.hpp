@@ -30,7 +30,8 @@ private:
 
     void handleRequest(QTcpSocket *sock,
                        const QString &method,
-                       const QString &path);
+                       const QString &path,
+                       const QByteArray &body);
 
     void sendJson(QTcpSocket *sock, int status, const QByteArray &body);
     void sendError(QTcpSocket *sock, int status, const QString &msg);
