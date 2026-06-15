@@ -97,30 +97,6 @@ Items without a countdown omit the field entirely.
 
 ---
 
-## Building From Source
-
-Requires CMake 3.28+, a C++17 compiler, and an internet connection (the build system auto-downloads OBS and Qt dependencies).
-
-**Windows**
-```
-cmake --preset windows-x64
-cmake --build --preset windows-x64
-```
-
-**macOS**
-```
-cmake --preset macos
-cmake --build --preset macos
-```
-
-**Linux**
-```
-cmake --preset ubuntu-x86_64
-cmake --build --preset ubuntu-x86_64
-```
-
----
-
 ## Requirements
 
 - OBS Studio 28.0 or later
