@@ -24,7 +24,8 @@ Each item is completely independent. You can have Sponsor A live during segment 
 ### macOS
 1. Download `obs-downstream-keyer-1.2.0-macos-universal.pkg` from the [latest release](../../releases/latest)
 2. Extract and copy the `.plugin` bundle to `~/Library/Application Support/obs-studio/plugins/`
-3. Restart OBS
+3.   If you receive an error that MacOS cannot open an app from an unknown developer, open system settings, privacy and security and click open anyway
+4. Restart OBS
 
 ### Linux
 1. Download the `.deb` from the [latest release](../../releases/latest)
