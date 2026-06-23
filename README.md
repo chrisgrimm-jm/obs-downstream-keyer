@@ -22,7 +22,7 @@ Each item is completely independent. You can have Sponsor A live during segment 
 3. Restart OBS
 
 ### macOS
-1. Download `obs-downstream-keyer-macos-universal.tar.xz` from the [latest release](../../releases/latest)
+1. Download `obs-downstream-keyer-1.2.0-macos-universal.pkg` from the [latest release](../../releases/latest)
 2. Extract and copy the `.plugin` bundle to `~/Library/Application Support/obs-studio/plugins/`
 3. Restart OBS
 
