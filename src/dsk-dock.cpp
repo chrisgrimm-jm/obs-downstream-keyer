@@ -214,6 +214,14 @@ void DskDock::buildListView(QVBoxLayout *layout)
                 menu.addAction("Reset to Default Color", this, [this, sname]() {
                     onResetColorClicked(sname);
                 });
+                menu.addSeparator();
+                menu.addAction("Properties\xe2\x80\xa6", this, [sname]() {
+                    obs_source_t *src = obs_get_source_by_name(sname.toUtf8().constData());
+                    if (src) {
+                        obs_frontend_open_source_properties(src);
+                        obs_source_release(src);
+                    }
+                });
                 menu.exec(toggleBtn->mapToGlobal(pos));
             });
 
@@ -323,6 +331,14 @@ void DskDock::onGridContextMenu(const QString &sourceName, const QPoint &globalP
     });
     menu.addAction("Reset to Default Color", this, [this, sourceName]() {
         onResetColorClicked(sourceName);
+    });
+    menu.addSeparator();
+    menu.addAction("Properties\xe2\x80\xa6", this, [sourceName]() {
+        obs_source_t *src = obs_get_source_by_name(sourceName.toUtf8().constData());
+        if (src) {
+            obs_frontend_open_source_properties(src);
+            obs_source_release(src);
+        }
     });
     menu.exec(globalPos);
 }
