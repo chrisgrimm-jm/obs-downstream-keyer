@@ -37,6 +37,8 @@ private slots:
     void onStateChanged(const QString &sourceName, bool active);
     void onRenameClicked(const QString &sourceName);
     void onViewToggle();
+    void onStageClicked();
+    void onPushLiveClicked();
 
 protected:
     bool eventFilter(QObject *obj, QEvent *event) override;

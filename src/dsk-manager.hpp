@@ -107,6 +107,19 @@ public:
     // Nests the DSK scene at the top of every other scene in the collection
     void addDskToAllScenes();
 
+    // ── Staging scene ──────────────────────────────────────────────────────────
+    // A second, un-nested scene ("<DSK scene> (Staging)") holding the same DSK
+    // sources plus the current program scene as a background reference. Its item
+    // transforms are independent of the live ones, so it's safe to drag/resize
+    // there without anything appearing on air.
+    std::string stagingSceneName() const { return m_sceneName + " (Staging)"; }
+    // Creates the staging scene if missing and adds any live DSK items not
+    // already staged, starting them at the live item's current transform.
+    void buildStagingScene();
+    // Copies each item's transform (pos/scale/rotation/bounds/crop) from the
+    // staging scene onto the matching live item, by source name.
+    void pushStagingToLive();
+
     // ── UI callbacks ──────────────────────────────────────────────────────────
     // Fires (queued to Qt main thread by callers) when items change or state changes
     using RefreshCallback = std::function<void()>;

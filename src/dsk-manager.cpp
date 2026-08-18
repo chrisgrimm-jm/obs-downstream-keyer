@@ -398,6 +398,91 @@ void DskManager::addDskToAllScenes()
     blog(LOG_INFO, "[dsk] Added '%s' to all scenes", m_sceneName.c_str());
 }
 
+// ── Staging scene ─────────────────────────────────────────────────────────────
+
+static void copyTransform(obs_sceneitem_t *from, obs_sceneitem_t *to)
+{
+    struct obs_transform_info info;
+    obs_sceneitem_get_info2(from, &info);
+    obs_sceneitem_set_info2(to, &info);
+
+    struct obs_sceneitem_crop crop;
+    obs_sceneitem_get_crop(from, &crop);
+    obs_sceneitem_set_crop(to, &crop);
+}
+
+void DskManager::buildStagingScene()
+{
+    std::string stagingName = stagingSceneName();
+
+    obs_source_t *stagingSrc = obs_get_source_by_name(stagingName.c_str());
+    obs_scene_t  *stagingScene = nullptr;
+    if (stagingSrc) {
+        stagingScene = obs_scene_from_source(stagingSrc);
+    } else {
+        stagingScene = obs_scene_create(stagingName.c_str());
+        if (!stagingScene) return;
+        stagingSrc = obs_source_get_ref(obs_scene_get_source(stagingScene));
+    }
+
+    // Nest the current program scene as a background reference, bottom-most,
+    // added once. Never touched again so it doesn't fight with manual reorders.
+    obs_source_t *programSrc = obs_frontend_get_current_scene();
+    if (programSrc) {
+        const char *programName = obs_source_get_name(programSrc);
+        if (programName && strcmp(programName, stagingName.c_str()) != 0 &&
+            !obs_scene_find_source(stagingScene, programName)) {
+            obs_sceneitem_t *bg = obs_scene_add(stagingScene, programSrc);
+            if (bg) obs_sceneitem_set_order(bg, OBS_ORDER_MOVE_BOTTOM);
+        }
+        obs_source_release(programSrc);
+    }
+
+    // Stage any live DSK item not already present, seeded at its live transform.
+    obs_scene_t *live = dskScene();
+    if (live) {
+        for (const auto &it : currentItems()) {
+            if (obs_scene_find_source(stagingScene, it.sourceName.c_str())) continue;
+
+            obs_source_t *itemSrc = obs_get_source_by_name(it.sourceName.c_str());
+            if (!itemSrc) continue;
+
+            obs_sceneitem_t *liveItem   = obs_scene_find_source(live, it.sourceName.c_str());
+            obs_sceneitem_t *stagedItem = obs_scene_add(stagingScene, itemSrc);
+            if (stagedItem && liveItem) copyTransform(liveItem, stagedItem);
+
+            obs_source_release(itemSrc);
+        }
+    }
+
+    obs_source_release(stagingSrc);
+    blog(LOG_INFO, "[dsk] Built staging scene '%s'", stagingName.c_str());
+}
+
+void DskManager::pushStagingToLive()
+{
+    obs_source_t *stagingSrc = obs_get_source_by_name(stagingSceneName().c_str());
+    if (!stagingSrc) return;
+
+    obs_scene_t *staging = obs_scene_from_source(stagingSrc);
+    obs_scene_t *live    = dskScene();
+
+    int pushed = 0;
+    if (staging && live) {
+        for (const auto &it : currentItems()) {
+            obs_sceneitem_t *stagedItem = obs_scene_find_source(staging, it.sourceName.c_str());
+            obs_sceneitem_t *liveItem   = obs_scene_find_source(live, it.sourceName.c_str());
+            if (stagedItem && liveItem) {
+                copyTransform(stagedItem, liveItem);
+                pushed++;
+            }
+        }
+    }
+
+    obs_source_release(stagingSrc);
+    blog(LOG_INFO, "[dsk] Pushed %d staged position(s) to live", pushed);
+}
+
 // ── Hotkeys ───────────────────────────────────────────────────────────────────
 
 void DskManager::registerHotkeys()

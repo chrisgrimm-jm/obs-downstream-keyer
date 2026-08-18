@@ -19,6 +19,7 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QMimeData>
+#include <QMessageBox>
 #include <algorithm>
 
 // ── Transition clipboard (in-memory, session-only) ────────────────────────────
@@ -88,6 +89,20 @@ void DskDock::buildUI()
     m_viewToggle->setToolTip("Toggle list / grid view");
     connect(m_viewToggle, &QPushButton::clicked, this, &DskDock::onViewToggle);
     topBar->addWidget(m_viewToggle);
+
+    auto *stageBtn = new QPushButton("Stage");
+    stageBtn->setStyleSheet(kSettingsBtn);
+    stageBtn->setFixedHeight(22);
+    stageBtn->setToolTip("Open a safe-to-edit copy of the DSK scene (never on air)");
+    connect(stageBtn, &QPushButton::clicked, this, &DskDock::onStageClicked);
+    topBar->addWidget(stageBtn);
+
+    auto *pushLiveBtn = new QPushButton("Push Live");
+    pushLiveBtn->setStyleSheet(kSettingsBtn);
+    pushLiveBtn->setFixedHeight(22);
+    pushLiveBtn->setToolTip("Copy staged positions onto the live DSK items");
+    connect(pushLiveBtn, &QPushButton::clicked, this, &DskDock::onPushLiveClicked);
+    topBar->addWidget(pushLiveBtn);
 
     auto *playlistBtn = new QPushButton("Playlist\xe2\x80\xa6");
     playlistBtn->setStyleSheet(kSettingsBtn);
@@ -509,6 +524,21 @@ void DskDock::onRenameClicked(const QString &sourceName)
     obs_source_set_name(src, newName.toUtf8().constData());
     obs_source_release(src);
     // OBS fires source_rename → cbSourceRename re-keys maps + hotkeys + triggers refresh
+}
+
+void DskDock::onStageClicked()
+{
+    DskManager::instance().buildStagingScene();
+    QMessageBox::information(this, "Staging scene ready",
+        QString("Switch to \"%1\" in your scene list to make adjustments — "
+                "it's never nested into anything else, so nothing goes on air.\n\n"
+                "When you're happy with it, click \"Push Live\".")
+            .arg(QString::fromStdString(DskManager::instance().stagingSceneName())));
+}
+
+void DskDock::onPushLiveClicked()
+{
+    DskManager::instance().pushStagingToLive();
 }
 
 void DskDock::onSettingsClicked()
