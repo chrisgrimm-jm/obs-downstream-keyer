@@ -114,8 +114,10 @@ public:
     // there without anything appearing on air.
     std::string stagingSceneName() const { return m_sceneName + " (Staging)"; }
     // Creates the staging scene if missing, adds any live DSK items not already
-    // staged (seeded at the live item's transform), then switches OBS into
-    // Studio Mode with this scene as the Preview — ready to edit immediately.
+    // staged (seeded at the live item's transform), syncs each item's visible +
+    // locked state from its live counterpart (only the on-air item is unlocked),
+    // then switches OBS into Studio Mode with this scene as the Preview — ready
+    // to edit immediately.
     void buildStagingScene();
     // Copies each item's transform (pos/scale/rotation/bounds/crop) from the
     // staging scene onto the matching live item, by source name, then exits

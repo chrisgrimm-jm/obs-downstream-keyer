@@ -444,17 +444,27 @@ void DskManager::buildStagingScene()
     }
 
     // Stage any live DSK item not already present, seeded at its live transform.
+    // Every pass (including refreshes) also syncs visibility + lock from live:
+    // only the item currently on air is visible and unlocked, so with several
+    // keyers stacked in the same spot you can only ever grab the active one.
     obs_scene_t *live = dskScene();
     if (live) {
         for (const auto &it : currentItems()) {
-            if (obs_scene_find_source(stagingScene, it.sourceName.c_str())) continue;
-
             obs_source_t *itemSrc = obs_get_source_by_name(it.sourceName.c_str());
             if (!itemSrc) continue;
 
             obs_sceneitem_t *liveItem   = obs_scene_find_source(live, it.sourceName.c_str());
-            obs_sceneitem_t *stagedItem = obs_scene_add(stagingScene, itemSrc);
-            if (stagedItem && liveItem) copyTransform(liveItem, stagedItem);
+            obs_sceneitem_t *stagedItem = obs_scene_find_source(stagingScene, it.sourceName.c_str());
+            if (!stagedItem) {
+                stagedItem = obs_scene_add(stagingScene, itemSrc);
+                if (stagedItem && liveItem) copyTransform(liveItem, stagedItem);
+            }
+
+            if (stagedItem) {
+                bool visible = liveItem && obs_sceneitem_visible(liveItem);
+                obs_sceneitem_set_visible(stagedItem, visible);
+                obs_sceneitem_set_locked(stagedItem, !visible);
+            }
 
             obs_source_release(itemSrc);
         }
