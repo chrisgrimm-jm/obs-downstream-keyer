@@ -113,8 +113,9 @@ public:
     // transforms are independent of the live ones, so it's safe to drag/resize
     // there without anything appearing on air.
     std::string stagingSceneName() const { return m_sceneName + " (Staging)"; }
-    // Creates the staging scene if missing and adds any live DSK items not
-    // already staged, starting them at the live item's current transform.
+    // Creates the staging scene if missing, adds any live DSK items not already
+    // staged (seeded at the live item's transform), then switches OBS into
+    // Studio Mode with this scene as the Preview — ready to edit immediately.
     void buildStagingScene();
     // Copies each item's transform (pos/scale/rotation/bounds/crop) from the
     // staging scene onto the matching live item, by source name.

@@ -19,7 +19,6 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QMimeData>
-#include <QMessageBox>
 #include <algorithm>
 
 // ── Transition clipboard (in-memory, session-only) ────────────────────────────
@@ -90,10 +89,10 @@ void DskDock::buildUI()
     connect(m_viewToggle, &QPushButton::clicked, this, &DskDock::onViewToggle);
     topBar->addWidget(m_viewToggle);
 
-    auto *stageBtn = new QPushButton("Stage");
+    auto *stageBtn = new QPushButton("Edit");
     stageBtn->setStyleSheet(kSettingsBtn);
     stageBtn->setFixedHeight(22);
-    stageBtn->setToolTip("Open a safe-to-edit copy of the DSK scene (never on air)");
+    stageBtn->setToolTip("Switch Studio Mode's Preview to a safe copy of the DSK scene (never on air)");
     connect(stageBtn, &QPushButton::clicked, this, &DskDock::onStageClicked);
     topBar->addWidget(stageBtn);
 
@@ -529,11 +528,6 @@ void DskDock::onRenameClicked(const QString &sourceName)
 void DskDock::onStageClicked()
 {
     DskManager::instance().buildStagingScene();
-    QMessageBox::information(this, "Staging scene ready",
-        QString("Switch to \"%1\" in your scene list to make adjustments — "
-                "it's never nested into anything else, so nothing goes on air.\n\n"
-                "When you're happy with it, click \"Push Live\".")
-            .arg(QString::fromStdString(DskManager::instance().stagingSceneName())));
 }
 
 void DskDock::onPushLiveClicked()

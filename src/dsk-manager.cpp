@@ -433,7 +433,12 @@ void DskManager::buildStagingScene()
         if (programName && strcmp(programName, stagingName.c_str()) != 0 &&
             !obs_scene_find_source(stagingScene, programName)) {
             obs_sceneitem_t *bg = obs_scene_add(stagingScene, programSrc);
-            if (bg) obs_sceneitem_set_order(bg, OBS_ORDER_MOVE_BOTTOM);
+            if (bg) {
+                obs_sceneitem_set_order(bg, OBS_ORDER_MOVE_BOTTOM);
+                // Locked so it can't be dragged/selected by accident while
+                // editing the DSK items on top of it.
+                obs_sceneitem_set_locked(bg, true);
+            }
         }
         obs_source_release(programSrc);
     }
@@ -454,6 +459,12 @@ void DskManager::buildStagingScene()
             obs_source_release(itemSrc);
         }
     }
+
+    // Drop the operator straight into an editable canvas: Studio Mode's Preview
+    // pane, showing the staging scene, ready to drag/resize with OBS's own
+    // native item handles. No manual scene switching required.
+    obs_frontend_set_preview_program_mode(true);
+    obs_frontend_set_current_preview_scene(stagingSrc);
 
     obs_source_release(stagingSrc);
     blog(LOG_INFO, "[dsk] Built staging scene '%s'", stagingName.c_str());
