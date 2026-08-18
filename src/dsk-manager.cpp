@@ -425,6 +425,13 @@ void DskManager::buildStagingScene()
         stagingSrc = obs_source_get_ref(obs_scene_get_source(stagingScene));
     }
 
+    // Keep lock following visibility live, not just at build time: connect
+    // (idempotent — disconnect first) so toggling an item's eye icon in the
+    // staging scene immediately unlocks/relocks it.
+    signal_handler_t *stagingSh = obs_source_get_signal_handler(stagingSrc);
+    signal_handler_disconnect(stagingSh, "item_visible", cbStagingItemVisible, this);
+    signal_handler_connect(stagingSh, "item_visible", cbStagingItemVisible, this);
+
     // Nest the current program scene as a background reference, bottom-most,
     // added once. Never touched again so it doesn't fight with manual reorders.
     obs_source_t *programSrc = obs_frontend_get_current_scene();
@@ -608,6 +615,24 @@ void DskManager::cbItemRemove(void *data, calldata_t *cd)
     mgr->registerHotkeys();
 
     if (mgr->m_refreshCb) mgr->m_refreshCb();
+}
+
+void DskManager::cbStagingItemVisible(void *data, calldata_t *cd)
+{
+    auto             *mgr     = static_cast<DskManager *>(data);
+    obs_sceneitem_t  *item    = static_cast<obs_sceneitem_t *>(calldata_ptr(cd, "item"));
+    bool              visible = calldata_bool(cd, "visible");
+    if (!item) return;
+
+    obs_source_t *src  = obs_sceneitem_get_source(item);
+    const char   *name = src ? obs_source_get_name(src) : nullptr;
+    if (!name) return;
+
+    // Only DSK graphic items follow this rule — leave the (permanently locked)
+    // background reference layer alone.
+    if (!mgr->findItem(name)) return;
+
+    obs_sceneitem_set_locked(item, !visible);
 }
 
 void DskManager::cbSourceRename(void *data, calldata_t *cd)

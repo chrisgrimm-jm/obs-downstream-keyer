@@ -150,6 +150,9 @@ private:
     static void cbSourceRename(void *data, calldata_t *cd);
     static void cbFrontendEvent(enum obs_frontend_event event, void *data);
     static void cbHotkeyToggle(void *data, obs_hotkey_id id, obs_hotkey_t *hk, bool pressed);
+    // Keeps a staged item's lock state following its own visibility toggle
+    // (fired whenever the operator flips the eye icon in the staging scene).
+    static void cbStagingItemVisible(void *data, calldata_t *cd);
 
     // Per-collection persistence helpers
     std::string collectionConfigPath() const;
