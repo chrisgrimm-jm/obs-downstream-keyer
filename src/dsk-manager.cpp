@@ -491,6 +491,10 @@ void DskManager::pushStagingToLive()
     }
 
     obs_source_release(stagingSrc);
+
+    // Back to normal single-view output now that the edit is applied.
+    obs_frontend_set_preview_program_mode(false);
+
     blog(LOG_INFO, "[dsk] Pushed %d staged position(s) to live", pushed);
 }
 

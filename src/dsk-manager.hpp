@@ -118,7 +118,8 @@ public:
     // Studio Mode with this scene as the Preview — ready to edit immediately.
     void buildStagingScene();
     // Copies each item's transform (pos/scale/rotation/bounds/crop) from the
-    // staging scene onto the matching live item, by source name.
+    // staging scene onto the matching live item, by source name, then exits
+    // Studio Mode back to normal single-view output.
     void pushStagingToLive();
 
     // ── UI callbacks ──────────────────────────────────────────────────────────
