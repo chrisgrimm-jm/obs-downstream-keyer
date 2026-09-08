@@ -535,7 +535,15 @@ void DskDock::onAlwaysOnToggled(const QString &sourceName, bool alwaysOn)
 {
     DskManager::instance().setAlwaysOn(sourceName.toStdString(), alwaysOn);
     DskManager::instance().saveSettings();
-    refresh();
+
+    // Not a direct refresh() call: this runs from a QAction inside a QMenu
+    // that's still executing (menu.exec() hasn't returned yet), spawned from
+    // this very button's context-menu handler. refresh() does a synchronous
+    // `delete m_itemContainer`, which would destroy that button out from
+    // under Qt's still-active event-handling call stack — a use-after-free
+    // that doesn't reliably crash until well after the fact. Queue it instead
+    // so it runs once the menu has fully closed and unwound.
+    QMetaObject::invokeMethod(this, "refresh", Qt::QueuedConnection);
 }
 
 void DskDock::onRenameClicked(const QString &sourceName)
