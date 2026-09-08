@@ -27,6 +27,7 @@ struct DskTransitionConfig {
     std::string hideSettings;  // JSON blob of transition source settings
     uint32_t    autoDuration = 0; // seconds before auto-hide (0 = disabled)
     std::string buttonColor;   // hex color e.g. "#27ae60", empty = default green
+    bool        alwaysOn = false; // pinned visible; toggle/deactivate become no-ops
 };
 
 class DskManager {
@@ -80,6 +81,12 @@ public:
 
     // Per-item button color (hex string, e.g. "#e74c3c"). Empty string = default.
     void setButtonColor(const std::string &sourceName, const std::string &colorHex);
+
+    // Pinned-visible items: deactivate()/toggle() become no-ops for them, and
+    // turning this on immediately forces the item visible. Lets a group (or
+    // any single item) act as permanent on-air branding with no toggle button.
+    bool isAlwaysOn(const std::string &sourceName) const;
+    void setAlwaysOn(const std::string &sourceName, bool alwaysOn);
 
     // Seconds remaining until auto-hide fires. Returns -1 if no countdown is active.
     double timeRemaining(const std::string &sourceName) const;

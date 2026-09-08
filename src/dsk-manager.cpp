@@ -148,6 +148,8 @@ void DskManager::activate(const std::string &sourceName)
 
 void DskManager::deactivate(const std::string &sourceName)
 {
+    if (isAlwaysOn(sourceName)) return; // pinned on — nothing can turn it off
+
     ++m_timerSeq[sourceName]; // invalidate any pending auto-hide timer
     m_expiryTime.erase(sourceName);
     obs_sceneitem_t *item = findItem(sourceName);
@@ -183,6 +185,18 @@ void DskManager::setTransitionConfig(const std::string &sourceName,
 void DskManager::setButtonColor(const std::string &sourceName, const std::string &colorHex)
 {
     m_transitions[sourceName].buttonColor = colorHex;
+}
+
+bool DskManager::isAlwaysOn(const std::string &sourceName) const
+{
+    auto it = m_transitions.find(sourceName);
+    return it != m_transitions.end() && it->second.alwaysOn;
+}
+
+void DskManager::setAlwaysOn(const std::string &sourceName, bool alwaysOn)
+{
+    m_transitions[sourceName].alwaysOn = alwaysOn;
+    if (alwaysOn) activate(sourceName);
 }
 
 double DskManager::timeRemaining(const std::string &sourceName) const
@@ -731,6 +745,7 @@ void DskManager::loadCollectionSettings()
                     cfg.autoDuration = (uint32_t)obs_data_get_int(entry, "auto_dur");
                     const char *bc = obs_data_get_string(entry, "button_color");
                     if (bc) cfg.buttonColor = bc;
+                    cfg.alwaysOn = obs_data_get_bool(entry, "always_on");
                     m_transitions[name] = cfg;
                 }
                 obs_data_release(entry);
@@ -775,7 +790,14 @@ void DskManager::loadCollectionSettings()
             [](obs_scene_t *, obs_sceneitem_t *item, void *param) -> bool {
                 auto *mgr = static_cast<DskManager *>(param);
                 obs_source_t *s = obs_sceneitem_get_source(item);
-                if (s) { const char *n = obs_source_get_name(s); if (n) mgr->applyTransitions(n); }
+                if (s) {
+                    const char *n = obs_source_get_name(s);
+                    if (n) {
+                        mgr->applyTransitions(n);
+                        // Self-heal: an always-on item should never load hidden.
+                        if (mgr->isAlwaysOn(n)) obs_sceneitem_set_visible(item, true);
+                    }
+                }
                 return true;
             }, this);
     }
@@ -805,6 +827,7 @@ void DskManager::saveCollectionSettings()
         obs_data_set_string(entry, "hide_settings", cfg.hideSettings.c_str());
         obs_data_set_int(entry,    "auto_dur",      cfg.autoDuration);
         obs_data_set_string(entry, "button_color",  cfg.buttonColor.c_str());
+        obs_data_set_bool(entry,   "always_on",     cfg.alwaysOn);
         obs_data_array_push_back(items, entry);
         obs_data_release(entry);
     }

@@ -171,6 +171,12 @@ void DskDock::buildListView(QVBoxLayout *layout)
         toggleBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         toggleBtn->setMinimumHeight(44);
         toggleBtn->setActive(item.visible);
+        // Not setEnabled(false): a disabled QWidget also stops receiving
+        // context-menu events, which would leave no way to un-pin it. The
+        // manager makes deactivate()/toggle() no-ops for always-on items, so
+        // clicking is already harmless — this is just a visual/tooltip cue.
+        if (mgr.isAlwaysOn(item.sourceName))
+            toggleBtn->setToolTip("Always On — right-click to change");
 
         // Apply saved button color
         const DskTransitionConfig *cfg =
@@ -229,6 +235,13 @@ void DskDock::buildListView(QVBoxLayout *layout)
                     onResetColorClicked(sname);
                 });
                 menu.addSeparator();
+                auto *alwaysOnAct = menu.addAction("Always On (no toggle button)");
+                alwaysOnAct->setCheckable(true);
+                alwaysOnAct->setChecked(DskManager::instance().isAlwaysOn(sname.toStdString()));
+                connect(alwaysOnAct, &QAction::toggled, this, [this, sname](bool checked) {
+                    onAlwaysOnToggled(sname, checked);
+                });
+                menu.addSeparator();
                 menu.addAction("Properties\xe2\x80\xa6", this, [sname]() {
                     obs_source_t *src = obs_get_source_by_name(sname.toUtf8().constData());
                     if (src) {
@@ -278,6 +291,8 @@ void DskDock::buildGridView(QVBoxLayout *layout)
         btn->setMinimumHeight(55);
         btn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         btn->setActive(item.visible);
+        if (mgr.isAlwaysOn(item.sourceName))
+            btn->setToolTip("Always On — right-click to change");
 
         // Apply saved button color
         const DskTransitionConfig *cfg = mgr.transitionConfig(item.sourceName);
@@ -345,6 +360,13 @@ void DskDock::onGridContextMenu(const QString &sourceName, const QPoint &globalP
     });
     menu.addAction("Reset to Default Color", this, [this, sourceName]() {
         onResetColorClicked(sourceName);
+    });
+    menu.addSeparator();
+    auto *alwaysOnAct = menu.addAction("Always On (no toggle button)");
+    alwaysOnAct->setCheckable(true);
+    alwaysOnAct->setChecked(DskManager::instance().isAlwaysOn(sourceName.toStdString()));
+    connect(alwaysOnAct, &QAction::toggled, this, [this, sourceName](bool checked) {
+        onAlwaysOnToggled(sourceName, checked);
     });
     menu.addSeparator();
     menu.addAction("Properties\xe2\x80\xa6", this, [sourceName]() {
@@ -507,6 +529,13 @@ void DskDock::onResetColorClicked(const QString &sourceName)
 
     DskTimerButton *btn = findTimerButton(sourceName);
     if (btn) btn->setButtonColor(QColor()); // invalid color → resets to default dark gray
+}
+
+void DskDock::onAlwaysOnToggled(const QString &sourceName, bool alwaysOn)
+{
+    DskManager::instance().setAlwaysOn(sourceName.toStdString(), alwaysOn);
+    DskManager::instance().saveSettings();
+    refresh();
 }
 
 void DskDock::onRenameClicked(const QString &sourceName)
