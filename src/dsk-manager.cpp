@@ -43,6 +43,17 @@ void DskManager::shutdown()
         disconnectSceneSignals(src);
         obs_source_release(src);
     }
+
+    // buildStagingScene() connects this if the operator ever clicked "Edit";
+    // left connected past shutdown, a late item_visible signal (e.g. during
+    // final scene teardown) would call back into libobs after it may no
+    // longer be safe to do so.
+    obs_source_t *stagingSrc = obs_get_source_by_name(stagingSceneName().c_str());
+    if (stagingSrc) {
+        signal_handler_t *stagingSh = obs_source_get_signal_handler(stagingSrc);
+        signal_handler_disconnect(stagingSh, "item_visible", cbStagingItemVisible, this);
+        obs_source_release(stagingSrc);
+    }
 }
 
 // ── DSK scene access ──────────────────────────────────────────────────────────
