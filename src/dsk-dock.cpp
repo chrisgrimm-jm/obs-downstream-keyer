@@ -103,7 +103,7 @@ void DskDock::buildUI()
     connect(pushLiveBtn, &QPushButton::clicked, this, &DskDock::onPushLiveClicked);
     topBar->addWidget(pushLiveBtn);
 
-    auto *playlistBtn = new QPushButton("Playlist\xe2\x80\xa6");
+    auto *playlistBtn = new QPushButton("Sponsor Loop\xe2\x80\xa6");
     playlistBtn->setStyleSheet(kSettingsBtn);
     playlistBtn->setFixedHeight(22);
     connect(playlistBtn, &QPushButton::clicked, this, &DskDock::onPlaylistClicked);

@@ -66,13 +66,6 @@ public:
     // Returns all items currently in the DSK scene (snapshot, safe to call from UI thread)
     std::vector<ItemInfo> currentItems() const;
 
-    // Every playable source name, including ones nested one level inside a
-    // Group. Unlike currentItems() (top-level only, so a Group shows as one
-    // dock button), this is for pickers — e.g. the sponsor-loop dialog — that
-    // need to target an individual item even when it lives inside a Group
-    // used as a master on/off switch for the whole loop.
-    std::vector<std::string> playlistEligibleSourceNames() const;
-
     // ── Item control ──────────────────────────────────────────────────────────
     void activate(const std::string &sourceName);
     void deactivate(const std::string &sourceName);
@@ -101,9 +94,22 @@ public:
     // Reorder a source to newIndex (0 = first in dock) within the DSK scene.
     void reorderItem(const std::string &sourceName, int newIndex);
 
-    // ── Playlist ──────────────────────────────────────────────────────────────
-    const std::vector<PlaylistEntry> &playlist() const { return m_playlist; }
-    void setPlaylist(std::vector<PlaylistEntry> entries);
+    // ── Sponsor loop ──────────────────────────────────────────────────────────
+    // Name of the OBS Group whose contents define the loop's rotation: an
+    // item counts as "in the loop" purely by being inside this group in the
+    // DSK scene, and the rotation order always matches the group's current
+    // item order there. Fixed for now — rename the group in OBS to match.
+    static const std::string &sponsorLoopGroupName();
+
+    // Current rotation: the loop group's items, in their current order, each
+    // with its stored duration (or the default if none has been set yet).
+    // Computed live from the scene every call — never a stale snapshot.
+    std::vector<PlaylistEntry> currentLoopEntries() const;
+
+    // Per-item duration override, keyed by source name. Membership/order are
+    // never stored here — only durations, looked up by currentLoopEntries().
+    void setLoopDuration(const std::string &sourceName, uint32_t onDuration, uint32_t offDuration);
+
     void startPlaylist();
     void stopPlaylist();
     bool isPlaylistRunning() const { return m_playlistRunning; }
@@ -160,6 +166,8 @@ private:
     obs_scene_t *dskScene() const;
     // Returns the scene item for a named source inside the DSK scene (no addref)
     obs_sceneitem_t *findItem(const std::string &sourceName) const;
+    // Returns the sponsor-loop Group's own top-level scene item (no addref)
+    obs_sceneitem_t *findLoopGroupItem() const;
 
     void registerHotkeys();
     void unregisterAllHotkeys();
@@ -209,6 +217,9 @@ private:
     std::unordered_map<std::string, DskTransitionConfig> m_transitions;
     std::vector<HotkeyEntry>                             m_hotkeys;
 
+    // Per-item duration overrides only, keyed by PlaylistEntry::sourceName —
+    // NOT the rotation membership/order, which always comes live from the
+    // sponsor-loop group's actual contents (see currentLoopEntries()).
     std::vector<PlaylistEntry> m_playlist;
     bool     m_playlistRunning = false;
     bool     m_playlistInGap   = false;

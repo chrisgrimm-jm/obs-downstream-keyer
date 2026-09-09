@@ -3,7 +3,6 @@
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
-#include <QFormLayout>
 #include <QLabel>
 #include <QDialogButtonBox>
 #include <QListWidgetItem>
@@ -19,9 +18,8 @@ static const char *kDlgBtn =
 DskPlaylistDialog::DskPlaylistDialog(QWidget *parent)
     : QDialog(parent)
 {
-    setWindowTitle("Sponsor Playlist");
-    setMinimumWidth(460);
-    m_entries = DskManager::instance().playlist();
+    setWindowTitle("Sponsor Loop");
+    setMinimumWidth(420);
     buildUI();
 }
 
@@ -31,15 +29,15 @@ void DskPlaylistDialog::buildUI()
     root->setSpacing(8);
 
     auto *hint = new QLabel(
-        "Build a loop of sponsor sources. Each entry plays on-air for its set duration, "
-        "then waits during the gap before the next sponsor fires.");
+        QString("Sources inside the \"%1\" group rotate automatically, in that group's "
+                "order. Add or remove sponsors by editing that group in OBS's Sources "
+                "panel — select an entry below to set its on-air/gap duration.")
+            .arg(QString::fromStdString(DskManager::sponsorLoopGroupName())));
     hint->setWordWrap(true);
     hint->setStyleSheet("color: #888; font-size: 10px;");
     root->addWidget(hint);
 
     m_list = new QListWidget();
-    m_list->setDragDropMode(QAbstractItemView::InternalMove);
-    m_list->setDefaultDropAction(Qt::MoveAction);
     m_list->setSelectionMode(QAbstractItemView::SingleSelection);
     m_list->setMinimumHeight(160);
     root->addWidget(m_list);
@@ -47,15 +45,9 @@ void DskPlaylistDialog::buildUI()
     connect(m_list, &QListWidget::itemSelectionChanged,
             this, &DskPlaylistDialog::onSelectionChanged);
 
-    // Add entry form
-    auto *formWidget = new QWidget();
-    auto *form = new QHBoxLayout(formWidget);
+    auto *form = new QHBoxLayout();
     form->setContentsMargins(0, 0, 0, 0);
     form->setSpacing(6);
-
-    m_sourceCombo = new QComboBox();
-    m_sourceCombo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    form->addWidget(m_sourceCombo);
 
     form->addWidget(new QLabel("On-air:"));
     m_onSpin = new QSpinBox();
@@ -71,44 +63,36 @@ void DskPlaylistDialog::buildUI()
     m_offSpin->setSuffix(" sec");
     form->addWidget(m_offSpin);
 
-    m_addBtn = new QPushButton("Add");
-    m_addBtn->setStyleSheet(kDlgBtn);
-    connect(m_addBtn, &QPushButton::clicked, this, &DskPlaylistDialog::onAdd);
-    form->addWidget(m_addBtn);
+    m_setDurationBtn = new QPushButton("Set Duration");
+    m_setDurationBtn->setStyleSheet(kDlgBtn);
+    m_setDurationBtn->setEnabled(false);
+    connect(m_setDurationBtn, &QPushButton::clicked, this, &DskPlaylistDialog::onSetDuration);
+    form->addWidget(m_setDurationBtn);
 
-    root->addWidget(formWidget);
-
-    auto *rowBtns = new QHBoxLayout();
-    rowBtns->setContentsMargins(0, 0, 0, 0);
-
-    m_removeBtn = new QPushButton("Remove Selected");
-    m_removeBtn->setStyleSheet(kDlgBtn);
-    m_removeBtn->setEnabled(false);
-    connect(m_removeBtn, &QPushButton::clicked, this, &DskPlaylistDialog::onRemove);
-    rowBtns->addWidget(m_removeBtn);
+    root->addLayout(form);
 
     m_playNowBtn = new QPushButton("\xe2\x96\xb6 Play Now");
     m_playNowBtn->setStyleSheet(kDlgBtn);
     m_playNowBtn->setEnabled(false);
     m_playNowBtn->setToolTip("Punch the selected sponsor to air immediately; the loop resumes from here afterward");
     connect(m_playNowBtn, &QPushButton::clicked, this, &DskPlaylistDialog::onPlayNow);
-    rowBtns->addWidget(m_playNowBtn);
+    root->addWidget(m_playNowBtn);
 
-    root->addLayout(rowBtns);
-
-    auto *btns = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-    connect(btns, &QDialogButtonBox::accepted, this, &DskPlaylistDialog::onAccept);
-    connect(btns, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    auto *btns = new QDialogButtonBox(QDialogButtonBox::Close);
+    connect(btns, &QDialogButtonBox::rejected, this, &QDialog::accept);
     root->addWidget(btns);
 
     populateList();
-    updateSourceCombo();
 }
 
 void DskPlaylistDialog::populateList()
 {
+    QString selectedName;
+    if (m_list->currentRow() >= 0)
+        selectedName = m_list->currentItem()->data(Qt::UserRole).toString();
+
     m_list->clear();
-    for (const auto &e : m_entries) {
+    for (const auto &e : DskManager::instance().currentLoopEntries()) {
         auto *item = new QListWidgetItem(
             QString("%1    ON: %2s   GAP: %3s")
                 .arg(QString::fromStdString(e.sourceName))
@@ -117,90 +101,45 @@ void DskPlaylistDialog::populateList()
         item->setData(Qt::UserRole,     QString::fromStdString(e.sourceName));
         item->setData(Qt::UserRole + 1, (int)e.onDuration);
         item->setData(Qt::UserRole + 2, (int)e.offDuration);
-        item->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled |
-                       Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled);
+        item->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled);
         m_list->addItem(item);
+
+        if (!selectedName.isEmpty() && selectedName == QString::fromStdString(e.sourceName))
+            m_list->setCurrentItem(item);
     }
+    updateButtons();
 }
 
-void DskPlaylistDialog::updateSourceCombo()
-{
-    m_sourceCombo->clear();
-    auto names = DskManager::instance().playlistEligibleSourceNames();
-    for (const auto &name : names) {
-        bool already = false;
-        for (const auto &e : m_entries)
-            if (e.sourceName == name) { already = true; break; }
-        if (!already)
-            m_sourceCombo->addItem(QString::fromStdString(name));
-    }
-    m_addBtn->setEnabled(m_sourceCombo->count() > 0);
-}
-
-void DskPlaylistDialog::updateRemoveButton()
+void DskPlaylistDialog::updateButtons()
 {
     bool hasSelection = m_list->currentRow() >= 0;
-    m_removeBtn->setEnabled(hasSelection);
+    m_setDurationBtn->setEnabled(hasSelection);
     m_playNowBtn->setEnabled(hasSelection);
 }
 
 void DskPlaylistDialog::onSelectionChanged()
 {
-    updateRemoveButton();
+    updateButtons();
+    QListWidgetItem *item = m_list->currentItem();
+    if (!item) return;
+    m_onSpin->setValue(item->data(Qt::UserRole + 1).toInt());
+    m_offSpin->setValue(item->data(Qt::UserRole + 2).toInt());
 }
 
-void DskPlaylistDialog::onAdd()
+void DskPlaylistDialog::onSetDuration()
 {
-    if (m_sourceCombo->currentIndex() < 0) return;
-    PlaylistEntry e;
-    e.sourceName  = m_sourceCombo->currentText().toStdString();
-    e.onDuration  = (uint32_t)m_onSpin->value();
-    e.offDuration = (uint32_t)m_offSpin->value();
-    m_entries.push_back(e);
-    populateList();
-    updateSourceCombo();
-}
+    QListWidgetItem *item = m_list->currentItem();
+    if (!item) return;
+    std::string name = item->data(Qt::UserRole).toString().toStdString();
 
-void DskPlaylistDialog::onRemove()
-{
-    int row = m_list->currentRow();
-    if (row < 0 || row >= (int)m_entries.size()) return;
-    m_entries.erase(m_entries.begin() + row);
-    populateList();
-    updateSourceCombo();
-    updateRemoveButton();
-}
-
-void DskPlaylistDialog::commitEntries()
-{
-    // Sync m_entries order from the list widget (user may have drag-reordered)
-    std::vector<PlaylistEntry> ordered;
-    for (int i = 0; i < m_list->count(); i++) {
-        QListWidgetItem *item = m_list->item(i);
-        PlaylistEntry e;
-        e.sourceName  = item->data(Qt::UserRole).toString().toStdString();
-        e.onDuration  = (uint32_t)item->data(Qt::UserRole + 1).toInt();
-        e.offDuration = (uint32_t)item->data(Qt::UserRole + 2).toInt();
-        ordered.push_back(e);
-    }
-    DskManager::instance().setPlaylist(std::move(ordered));
+    DskManager::instance().setLoopDuration(name, (uint32_t)m_onSpin->value(), (uint32_t)m_offSpin->value());
     DskManager::instance().saveSettings();
-}
-
-void DskPlaylistDialog::onAccept()
-{
-    commitEntries();
-    accept();
+    populateList();
 }
 
 void DskPlaylistDialog::onPlayNow()
 {
-    int row = m_list->currentRow();
-    if (row < 0 || row >= m_list->count()) return;
-    std::string name = m_list->item(row)->data(Qt::UserRole).toString().toStdString();
-
-    // Commit first so Play Now works even on an entry just added/reordered
-    // in this dialog, without requiring OK to be clicked first.
-    commitEntries();
-    DskManager::instance().playNow(name);
+    QListWidgetItem *item = m_list->currentItem();
+    if (!item) return;
+    DskManager::instance().playNow(item->data(Qt::UserRole).toString().toStdString());
 }

@@ -77,6 +77,13 @@ obs_sceneitem_t *DskManager::findItem(const std::string &sourceName) const
     return obs_scene_find_source_recursive(scene, sourceName.c_str());
 }
 
+obs_sceneitem_t *DskManager::findLoopGroupItem() const
+{
+    obs_scene_t *scene = dskScene();
+    if (!scene) return nullptr;
+    return obs_scene_find_source(scene, sponsorLoopGroupName().c_str());
+}
+
 // ── Scene name change ─────────────────────────────────────────────────────────
 
 void DskManager::setSceneName(const std::string &name)
@@ -126,39 +133,6 @@ std::vector<DskManager::ItemInfo> DskManager::currentItems() const
         &result);
 
     return result;
-}
-
-// Every playable source name, including ones nested one level inside a
-// Group — unlike currentItems(), which stays top-level-only so a Group shows
-// as a single dock button. Used by the sponsor-loop picker so items placed
-// inside a "master on/off" Group can still be selected as playlist steps.
-std::vector<std::string> DskManager::playlistEligibleSourceNames() const
-{
-    std::vector<std::string> names;
-    obs_scene_t *scene = dskScene();
-    if (!scene) return names;
-
-    auto addName = [](obs_scene_t *, obs_sceneitem_t *item, void *param) -> bool {
-        auto *out = static_cast<std::vector<std::string> *>(param);
-        obs_source_t *src = obs_sceneitem_get_source(item);
-        const char *name = src ? obs_source_get_name(src) : nullptr;
-        if (name && *name) out->push_back(name);
-
-        if (obs_sceneitem_is_group(item)) {
-            obs_sceneitem_group_enum_items(item,
-                [](obs_scene_t *, obs_sceneitem_t *child, void *p) -> bool {
-                    auto *out2 = static_cast<std::vector<std::string> *>(p);
-                    obs_source_t *csrc = obs_sceneitem_get_source(child);
-                    const char *cname = csrc ? obs_source_get_name(csrc) : nullptr;
-                    if (cname && *cname) out2->push_back(cname);
-                    return true;
-                }, param);
-        }
-        return true;
-    };
-
-    obs_scene_enum_items(scene, addName, &names);
-    return names;
 }
 
 // ── Item control ──────────────────────────────────────────────────────────────
@@ -300,16 +274,67 @@ void DskManager::applyTransitions(const std::string &sourceName)
     }
 }
 
-// ── Playlist ──────────────────────────────────────────────────────────────────
+// ── Sponsor loop ────────────────────────────────────────────────────────────
 
-void DskManager::setPlaylist(std::vector<PlaylistEntry> entries)
+const std::string &DskManager::sponsorLoopGroupName()
 {
-    m_playlist = std::move(entries);
+    static const std::string name = "Sponsor Loop";
+    return name;
+}
+
+std::vector<PlaylistEntry> DskManager::currentLoopEntries() const
+{
+    std::vector<PlaylistEntry> result;
+
+    obs_sceneitem_t *groupItem = findLoopGroupItem();
+    if (!groupItem || !obs_sceneitem_is_group(groupItem)) return result;
+
+    std::vector<std::string> names;
+    obs_sceneitem_group_enum_items(groupItem,
+        [](obs_scene_t *, obs_sceneitem_t *child, void *param) -> bool {
+            auto *out = static_cast<std::vector<std::string> *>(param);
+            obs_source_t *src = obs_sceneitem_get_source(child);
+            const char *name = src ? obs_source_get_name(src) : nullptr;
+            if (name && *name) out->push_back(name);
+            return true;
+        }, &names);
+
+    for (const auto &name : names) {
+        PlaylistEntry e;
+        e.sourceName  = name;
+        e.onDuration  = 30;
+        e.offDuration = 10;
+        for (const auto &saved : m_playlist) {
+            if (saved.sourceName == name) {
+                e.onDuration  = saved.onDuration;
+                e.offDuration = saved.offDuration;
+                break;
+            }
+        }
+        result.push_back(e);
+    }
+    return result;
+}
+
+void DskManager::setLoopDuration(const std::string &sourceName, uint32_t onDuration, uint32_t offDuration)
+{
+    for (auto &e : m_playlist) {
+        if (e.sourceName == sourceName) {
+            e.onDuration  = onDuration;
+            e.offDuration = offDuration;
+            return;
+        }
+    }
+    PlaylistEntry e;
+    e.sourceName  = sourceName;
+    e.onDuration  = onDuration;
+    e.offDuration = offDuration;
+    m_playlist.push_back(e);
 }
 
 void DskManager::startPlaylist()
 {
-    if (m_playlist.empty()) return;
+    if (currentLoopEntries().empty()) return;
     m_playlistRunning = true;
     m_playlistInGap   = false;
     m_playlistIndex   = 0;
@@ -320,9 +345,10 @@ void DskManager::startPlaylist()
 void DskManager::stopPlaylist()
 {
     ++m_playlistSeq;
-    if (m_playlistRunning && !m_playlistInGap && m_playlistIndex >= 0
-        && m_playlistIndex < (int)m_playlist.size()) {
-        deactivate(m_playlist[m_playlistIndex].sourceName);
+    if (m_playlistRunning && !m_playlistInGap && m_playlistIndex >= 0) {
+        auto entries = currentLoopEntries();
+        if (m_playlistIndex < (int)entries.size())
+            deactivate(entries[m_playlistIndex].sourceName);
     }
     m_playlistRunning = false;
     if (m_refreshCb) m_refreshCb();
@@ -330,9 +356,10 @@ void DskManager::stopPlaylist()
 
 void DskManager::playNow(const std::string &sourceName)
 {
+    auto entries = currentLoopEntries();
     int idx = -1;
-    for (size_t i = 0; i < m_playlist.size(); i++) {
-        if (m_playlist[i].sourceName == sourceName) { idx = (int)i; break; }
+    for (size_t i = 0; i < entries.size(); i++) {
+        if (entries[i].sourceName == sourceName) { idx = (int)i; break; }
     }
     if (idx < 0) return;
 
@@ -340,8 +367,8 @@ void DskManager::playNow(const std::string &sourceName)
     // straight into the chosen entry instead of stopping — the rotation
     // continues normally from here afterward.
     if (m_playlistRunning && !m_playlistInGap && m_playlistIndex >= 0
-        && m_playlistIndex < (int)m_playlist.size()) {
-        deactivate(m_playlist[m_playlistIndex].sourceName);
+        && m_playlistIndex < (int)entries.size()) {
+        deactivate(entries[m_playlistIndex].sourceName);
     }
     ++m_playlistSeq;
 
@@ -354,13 +381,17 @@ void DskManager::playNow(const std::string &sourceName)
 void DskManager::schedulePlaylistStep()
 {
     if (!m_playlistRunning) return;
-    if (m_playlistIndex < 0 || m_playlistIndex >= (int)m_playlist.size()) {
+
+    // Recomputed fresh every step: membership/order always reflect whatever
+    // is currently in the sponsor-loop group right now.
+    auto entries = currentLoopEntries();
+    if (entries.empty() || m_playlistIndex < 0 || m_playlistIndex >= (int)entries.size()) {
         m_playlistRunning = false;
         if (m_refreshCb) m_refreshCb();
         return;
     }
 
-    const PlaylistEntry &entry = m_playlist[m_playlistIndex];
+    const PlaylistEntry entry = entries[m_playlistIndex];
     uint64_t seq = m_playlistSeq;
 
     if (!m_playlistInGap) {
@@ -383,7 +414,15 @@ void DskManager::schedulePlaylistStep()
             [this, seq]() {
                 if (m_playlistSeq != seq) return;
                 m_playlistInGap = false;
-                m_playlistIndex = (m_playlistIndex + 1) % (int)m_playlist.size();
+                // Re-read the group fresh — it may have changed since this
+                // step started.
+                auto freshEntries = currentLoopEntries();
+                if (freshEntries.empty()) {
+                    m_playlistRunning = false;
+                    if (m_refreshCb) m_refreshCb();
+                    return;
+                }
+                m_playlistIndex = (m_playlistIndex + 1) % (int)freshEntries.size();
                 schedulePlaylistStep();
             });
     }
@@ -396,8 +435,9 @@ DskManager::PlaylistStatus DskManager::playlistStatus() const
     if (!m_playlistRunning) return s;
     s.inGap = m_playlistInGap;
     s.index = m_playlistIndex;
-    if (m_playlistIndex >= 0 && m_playlistIndex < (int)m_playlist.size())
-        s.sourceName = m_playlist[m_playlistIndex].sourceName;
+    auto entries = currentLoopEntries();
+    if (m_playlistIndex >= 0 && m_playlistIndex < (int)entries.size())
+        s.sourceName = entries[m_playlistIndex].sourceName;
     double rem = std::chrono::duration<double>(
         m_playlistStepExpiry - std::chrono::steady_clock::now()).count();
     s.secondsLeft = rem < 0.0 ? 0.0 : rem;
