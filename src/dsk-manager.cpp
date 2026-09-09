@@ -144,12 +144,16 @@ std::vector<std::string> DskManager::playlistEligibleSourceNames() const
         const char *name = src ? obs_source_get_name(src) : nullptr;
         if (name && *name) out->push_back(name);
 
-        if (obs_sceneitem_is_group(item)) {
+        bool isGroup = obs_sceneitem_is_group(item);
+        blog(LOG_INFO, "[dsk-debug] top-level '%s' is_group=%d", name ? name : "(null)", isGroup);
+
+        if (isGroup) {
             obs_sceneitem_group_enum_items(item,
                 [](obs_scene_t *, obs_sceneitem_t *child, void *p) -> bool {
                     auto *out2 = static_cast<std::vector<std::string> *>(p);
                     obs_source_t *csrc = obs_sceneitem_get_source(child);
                     const char *cname = csrc ? obs_source_get_name(csrc) : nullptr;
+                    blog(LOG_INFO, "[dsk-debug]   child '%s'", cname ? cname : "(null)");
                     if (cname && *cname) out2->push_back(cname);
                     return true;
                 }, param);
@@ -158,6 +162,7 @@ std::vector<std::string> DskManager::playlistEligibleSourceNames() const
     };
 
     obs_scene_enum_items(scene, addName, &names);
+    blog(LOG_INFO, "[dsk-debug] playlistEligibleSourceNames total=%d", (int)names.size());
     return names;
 }
 
