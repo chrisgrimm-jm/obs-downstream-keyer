@@ -60,7 +60,10 @@ obs_sceneitem_t *DskManager::findItem(const std::string &sourceName) const
 {
     obs_scene_t *scene = dskScene();
     if (!scene) return nullptr;
-    return obs_scene_find_source(scene, sourceName.c_str());
+    // Recursive: also finds items nested one level inside a Group, so the
+    // sponsor loop can cycle individual items that live inside a Group whose
+    // own top-level visibility acts as a master on/off for the whole loop.
+    return obs_scene_find_source_recursive(scene, sourceName.c_str());
 }
 
 // ── Scene name change ─────────────────────────────────────────────────────────
@@ -112,6 +115,39 @@ std::vector<DskManager::ItemInfo> DskManager::currentItems() const
         &result);
 
     return result;
+}
+
+// Every playable source name, including ones nested one level inside a
+// Group — unlike currentItems(), which stays top-level-only so a Group shows
+// as a single dock button. Used by the sponsor-loop picker so items placed
+// inside a "master on/off" Group can still be selected as playlist steps.
+std::vector<std::string> DskManager::playlistEligibleSourceNames() const
+{
+    std::vector<std::string> names;
+    obs_scene_t *scene = dskScene();
+    if (!scene) return names;
+
+    auto addName = [](obs_scene_t *, obs_sceneitem_t *item, void *param) -> bool {
+        auto *out = static_cast<std::vector<std::string> *>(param);
+        obs_source_t *src = obs_sceneitem_get_source(item);
+        const char *name = src ? obs_source_get_name(src) : nullptr;
+        if (name && *name) out->push_back(name);
+
+        if (obs_sceneitem_is_group(item)) {
+            obs_sceneitem_group_enum_items(item,
+                [](obs_scene_t *, obs_sceneitem_t *child, void *p) -> bool {
+                    auto *out2 = static_cast<std::vector<std::string> *>(p);
+                    obs_source_t *csrc = obs_sceneitem_get_source(child);
+                    const char *cname = csrc ? obs_source_get_name(csrc) : nullptr;
+                    if (cname && *cname) out2->push_back(cname);
+                    return true;
+                }, param);
+        }
+        return true;
+    };
+
+    obs_scene_enum_items(scene, addName, &names);
+    return names;
 }
 
 // ── Item control ──────────────────────────────────────────────────────────────

@@ -114,14 +114,13 @@ void DskPlaylistDialog::populateList()
 void DskPlaylistDialog::updateSourceCombo()
 {
     m_sourceCombo->clear();
-    auto items = DskManager::instance().currentItems();
-    for (const auto &info : items) {
-        QString sname = QString::fromStdString(info.sourceName);
+    auto names = DskManager::instance().playlistEligibleSourceNames();
+    for (const auto &name : names) {
         bool already = false;
         for (const auto &e : m_entries)
-            if (e.sourceName == info.sourceName) { already = true; break; }
+            if (e.sourceName == name) { already = true; break; }
         if (!already)
-            m_sourceCombo->addItem(sname);
+            m_sourceCombo->addItem(QString::fromStdString(name));
     }
     m_addBtn->setEnabled(m_sourceCombo->count() > 0);
 }

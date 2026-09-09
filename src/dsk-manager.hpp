@@ -66,6 +66,13 @@ public:
     // Returns all items currently in the DSK scene (snapshot, safe to call from UI thread)
     std::vector<ItemInfo> currentItems() const;
 
+    // Every playable source name, including ones nested one level inside a
+    // Group. Unlike currentItems() (top-level only, so a Group shows as one
+    // dock button), this is for pickers — e.g. the sponsor-loop dialog — that
+    // need to target an individual item even when it lives inside a Group
+    // used as a master on/off switch for the whole loop.
+    std::vector<std::string> playlistEligibleSourceNames() const;
+
     // ── Item control ──────────────────────────────────────────────────────────
     void activate(const std::string &sourceName);
     void deactivate(const std::string &sourceName);
