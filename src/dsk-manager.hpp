@@ -27,6 +27,7 @@ struct DskTransitionConfig {
     std::string hideSettings;  // JSON blob of transition source settings
     uint32_t    autoDuration = 0; // seconds before auto-hide (0 = disabled)
     std::string buttonColor;   // hex color e.g. "#27ae60", empty = default green
+    bool        alwaysOn = false; // pinned visible; toggle/deactivate become no-ops
 };
 
 class DskManager {
@@ -81,18 +82,44 @@ public:
     // Per-item button color (hex string, e.g. "#e74c3c"). Empty string = default.
     void setButtonColor(const std::string &sourceName, const std::string &colorHex);
 
+    // Pinned-visible items: deactivate()/toggle() become no-ops for them, and
+    // turning this on immediately forces the item visible. Lets a group (or
+    // any single item) act as permanent on-air branding with no toggle button.
+    bool isAlwaysOn(const std::string &sourceName) const;
+    void setAlwaysOn(const std::string &sourceName, bool alwaysOn);
+
     // Seconds remaining until auto-hide fires. Returns -1 if no countdown is active.
     double timeRemaining(const std::string &sourceName) const;
 
     // Reorder a source to newIndex (0 = first in dock) within the DSK scene.
     void reorderItem(const std::string &sourceName, int newIndex);
 
-    // ── Playlist ──────────────────────────────────────────────────────────────
-    const std::vector<PlaylistEntry> &playlist() const { return m_playlist; }
-    void setPlaylist(std::vector<PlaylistEntry> entries);
+    // ── Sponsor loop ──────────────────────────────────────────────────────────
+    // Name of the OBS Group whose contents define the loop's rotation: an
+    // item counts as "in the loop" purely by being inside this group in the
+    // DSK scene, and the rotation order always matches the group's current
+    // item order there. Fixed for now — rename the group in OBS to match.
+    static const std::string &sponsorLoopGroupName();
+
+    // Current rotation: the loop group's items, in their current order, each
+    // with its stored duration (or the default if none has been set yet).
+    // Computed live from the scene every call — never a stale snapshot.
+    std::vector<PlaylistEntry> currentLoopEntries() const;
+
+    // Per-item duration override, keyed by source name. Membership/order are
+    // never stored here — only durations, looked up by currentLoopEntries().
+    void setLoopDuration(const std::string &sourceName, uint32_t onDuration, uint32_t offDuration);
+
     void startPlaylist();
     void stopPlaylist();
     bool isPlaylistRunning() const { return m_playlistRunning; }
+
+    // Immediately shows the given playlist entry, interrupting whatever the
+    // loop currently has up (starting it if it wasn't running). The rotation
+    // continues normally from this entry afterward. Lets an operator punch a
+    // specific sponsor to air — e.g. for their live ad read — using the same
+    // source the loop already cycles, no duplicate asset needed.
+    void playNow(const std::string &sourceName);
 
     struct PlaylistStatus {
         bool        running     = false;
@@ -114,8 +141,10 @@ public:
     // there without anything appearing on air.
     std::string stagingSceneName() const { return m_sceneName + " (Staging)"; }
     // Creates the staging scene if missing, adds any live DSK items not already
-    // staged (seeded at the live item's transform), then switches OBS into
-    // Studio Mode with this scene as the Preview — ready to edit immediately.
+    // staged (seeded at the live item's transform), syncs each item's visible +
+    // locked state from its live counterpart (only the on-air item is unlocked),
+    // then switches OBS into Studio Mode with this scene as the Preview — ready
+    // to edit immediately.
     void buildStagingScene();
     // Copies each item's transform (pos/scale/rotation/bounds/crop) from the
     // staging scene onto the matching live item, by source name, then exits
@@ -137,6 +166,8 @@ private:
     obs_scene_t *dskScene() const;
     // Returns the scene item for a named source inside the DSK scene (no addref)
     obs_sceneitem_t *findItem(const std::string &sourceName) const;
+    // Returns the sponsor-loop Group's own top-level scene item (no addref)
+    obs_sceneitem_t *findLoopGroupItem() const;
 
     void registerHotkeys();
     void unregisterAllHotkeys();
@@ -148,6 +179,9 @@ private:
     static void cbSourceRename(void *data, calldata_t *cd);
     static void cbFrontendEvent(enum obs_frontend_event event, void *data);
     static void cbHotkeyToggle(void *data, obs_hotkey_id id, obs_hotkey_t *hk, bool pressed);
+    // Keeps a staged item's lock state following its own visibility toggle
+    // (fired whenever the operator flips the eye icon in the staging scene).
+    static void cbStagingItemVisible(void *data, calldata_t *cd);
 
     // Per-collection persistence helpers
     std::string collectionConfigPath() const;
@@ -183,6 +217,9 @@ private:
     std::unordered_map<std::string, DskTransitionConfig> m_transitions;
     std::vector<HotkeyEntry>                             m_hotkeys;
 
+    // Per-item duration overrides only, keyed by PlaylistEntry::sourceName —
+    // NOT the rotation membership/order, which always comes live from the
+    // sponsor-loop group's actual contents (see currentLoopEntries()).
     std::vector<PlaylistEntry> m_playlist;
     bool     m_playlistRunning = false;
     bool     m_playlistInGap   = false;

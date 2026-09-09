@@ -36,6 +36,7 @@ private slots:
     void onPlaylistTick();
     void onStateChanged(const QString &sourceName, bool active);
     void onRenameClicked(const QString &sourceName);
+    void onAlwaysOnToggled(const QString &sourceName, bool alwaysOn);
     void onViewToggle();
     void onStageClicked();
     void onPushLiveClicked();

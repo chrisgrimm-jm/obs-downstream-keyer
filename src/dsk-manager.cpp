@@ -43,6 +43,17 @@ void DskManager::shutdown()
         disconnectSceneSignals(src);
         obs_source_release(src);
     }
+
+    // buildStagingScene() connects this if the operator ever clicked "Edit";
+    // left connected past shutdown, a late item_visible signal (e.g. during
+    // final scene teardown) would call back into libobs after it may no
+    // longer be safe to do so.
+    obs_source_t *stagingSrc = obs_get_source_by_name(stagingSceneName().c_str());
+    if (stagingSrc) {
+        signal_handler_t *stagingSh = obs_source_get_signal_handler(stagingSrc);
+        signal_handler_disconnect(stagingSh, "item_visible", cbStagingItemVisible, this);
+        obs_source_release(stagingSrc);
+    }
 }
 
 // ── DSK scene access ──────────────────────────────────────────────────────────
@@ -60,7 +71,17 @@ obs_sceneitem_t *DskManager::findItem(const std::string &sourceName) const
 {
     obs_scene_t *scene = dskScene();
     if (!scene) return nullptr;
-    return obs_scene_find_source(scene, sourceName.c_str());
+    // Recursive: also finds items nested one level inside a Group, so the
+    // sponsor loop can cycle individual items that live inside a Group whose
+    // own top-level visibility acts as a master on/off for the whole loop.
+    return obs_scene_find_source_recursive(scene, sourceName.c_str());
+}
+
+obs_sceneitem_t *DskManager::findLoopGroupItem() const
+{
+    obs_scene_t *scene = dskScene();
+    if (!scene) return nullptr;
+    return obs_scene_find_source(scene, sponsorLoopGroupName().c_str());
 }
 
 // ── Scene name change ─────────────────────────────────────────────────────────
@@ -148,6 +169,8 @@ void DskManager::activate(const std::string &sourceName)
 
 void DskManager::deactivate(const std::string &sourceName)
 {
+    if (isAlwaysOn(sourceName)) return; // pinned on — nothing can turn it off
+
     ++m_timerSeq[sourceName]; // invalidate any pending auto-hide timer
     m_expiryTime.erase(sourceName);
     obs_sceneitem_t *item = findItem(sourceName);
@@ -183,6 +206,18 @@ void DskManager::setTransitionConfig(const std::string &sourceName,
 void DskManager::setButtonColor(const std::string &sourceName, const std::string &colorHex)
 {
     m_transitions[sourceName].buttonColor = colorHex;
+}
+
+bool DskManager::isAlwaysOn(const std::string &sourceName) const
+{
+    auto it = m_transitions.find(sourceName);
+    return it != m_transitions.end() && it->second.alwaysOn;
+}
+
+void DskManager::setAlwaysOn(const std::string &sourceName, bool alwaysOn)
+{
+    m_transitions[sourceName].alwaysOn = alwaysOn;
+    if (alwaysOn) activate(sourceName);
 }
 
 double DskManager::timeRemaining(const std::string &sourceName) const
@@ -239,16 +274,67 @@ void DskManager::applyTransitions(const std::string &sourceName)
     }
 }
 
-// ── Playlist ──────────────────────────────────────────────────────────────────
+// ── Sponsor loop ────────────────────────────────────────────────────────────
 
-void DskManager::setPlaylist(std::vector<PlaylistEntry> entries)
+const std::string &DskManager::sponsorLoopGroupName()
 {
-    m_playlist = std::move(entries);
+    static const std::string name = "Sponsor Loop";
+    return name;
+}
+
+std::vector<PlaylistEntry> DskManager::currentLoopEntries() const
+{
+    std::vector<PlaylistEntry> result;
+
+    obs_sceneitem_t *groupItem = findLoopGroupItem();
+    if (!groupItem || !obs_sceneitem_is_group(groupItem)) return result;
+
+    std::vector<std::string> names;
+    obs_sceneitem_group_enum_items(groupItem,
+        [](obs_scene_t *, obs_sceneitem_t *child, void *param) -> bool {
+            auto *out = static_cast<std::vector<std::string> *>(param);
+            obs_source_t *src = obs_sceneitem_get_source(child);
+            const char *name = src ? obs_source_get_name(src) : nullptr;
+            if (name && *name) out->push_back(name);
+            return true;
+        }, &names);
+
+    for (const auto &name : names) {
+        PlaylistEntry e;
+        e.sourceName  = name;
+        e.onDuration  = 30;
+        e.offDuration = 10;
+        for (const auto &saved : m_playlist) {
+            if (saved.sourceName == name) {
+                e.onDuration  = saved.onDuration;
+                e.offDuration = saved.offDuration;
+                break;
+            }
+        }
+        result.push_back(e);
+    }
+    return result;
+}
+
+void DskManager::setLoopDuration(const std::string &sourceName, uint32_t onDuration, uint32_t offDuration)
+{
+    for (auto &e : m_playlist) {
+        if (e.sourceName == sourceName) {
+            e.onDuration  = onDuration;
+            e.offDuration = offDuration;
+            return;
+        }
+    }
+    PlaylistEntry e;
+    e.sourceName  = sourceName;
+    e.onDuration  = onDuration;
+    e.offDuration = offDuration;
+    m_playlist.push_back(e);
 }
 
 void DskManager::startPlaylist()
 {
-    if (m_playlist.empty()) return;
+    if (currentLoopEntries().empty()) return;
     m_playlistRunning = true;
     m_playlistInGap   = false;
     m_playlistIndex   = 0;
@@ -259,24 +345,53 @@ void DskManager::startPlaylist()
 void DskManager::stopPlaylist()
 {
     ++m_playlistSeq;
-    if (m_playlistRunning && !m_playlistInGap && m_playlistIndex >= 0
-        && m_playlistIndex < (int)m_playlist.size()) {
-        deactivate(m_playlist[m_playlistIndex].sourceName);
+    if (m_playlistRunning && !m_playlistInGap && m_playlistIndex >= 0) {
+        auto entries = currentLoopEntries();
+        if (m_playlistIndex < (int)entries.size())
+            deactivate(entries[m_playlistIndex].sourceName);
     }
     m_playlistRunning = false;
     if (m_refreshCb) m_refreshCb();
 }
 
+void DskManager::playNow(const std::string &sourceName)
+{
+    auto entries = currentLoopEntries();
+    int idx = -1;
+    for (size_t i = 0; i < entries.size(); i++) {
+        if (entries[i].sourceName == sourceName) { idx = (int)i; break; }
+    }
+    if (idx < 0) return;
+
+    // Same teardown as stopPlaylist() for whatever's currently up, but jump
+    // straight into the chosen entry instead of stopping — the rotation
+    // continues normally from here afterward.
+    if (m_playlistRunning && !m_playlistInGap && m_playlistIndex >= 0
+        && m_playlistIndex < (int)entries.size()) {
+        deactivate(entries[m_playlistIndex].sourceName);
+    }
+    ++m_playlistSeq;
+
+    m_playlistRunning = true;
+    m_playlistInGap   = false;
+    m_playlistIndex   = idx;
+    schedulePlaylistStep();
+}
+
 void DskManager::schedulePlaylistStep()
 {
     if (!m_playlistRunning) return;
-    if (m_playlistIndex < 0 || m_playlistIndex >= (int)m_playlist.size()) {
+
+    // Recomputed fresh every step: membership/order always reflect whatever
+    // is currently in the sponsor-loop group right now.
+    auto entries = currentLoopEntries();
+    if (entries.empty() || m_playlistIndex < 0 || m_playlistIndex >= (int)entries.size()) {
         m_playlistRunning = false;
         if (m_refreshCb) m_refreshCb();
         return;
     }
 
-    const PlaylistEntry &entry = m_playlist[m_playlistIndex];
+    const PlaylistEntry entry = entries[m_playlistIndex];
     uint64_t seq = m_playlistSeq;
 
     if (!m_playlistInGap) {
@@ -299,7 +414,15 @@ void DskManager::schedulePlaylistStep()
             [this, seq]() {
                 if (m_playlistSeq != seq) return;
                 m_playlistInGap = false;
-                m_playlistIndex = (m_playlistIndex + 1) % (int)m_playlist.size();
+                // Re-read the group fresh — it may have changed since this
+                // step started.
+                auto freshEntries = currentLoopEntries();
+                if (freshEntries.empty()) {
+                    m_playlistRunning = false;
+                    if (m_refreshCb) m_refreshCb();
+                    return;
+                }
+                m_playlistIndex = (m_playlistIndex + 1) % (int)freshEntries.size();
                 schedulePlaylistStep();
             });
     }
@@ -312,8 +435,9 @@ DskManager::PlaylistStatus DskManager::playlistStatus() const
     if (!m_playlistRunning) return s;
     s.inGap = m_playlistInGap;
     s.index = m_playlistIndex;
-    if (m_playlistIndex >= 0 && m_playlistIndex < (int)m_playlist.size())
-        s.sourceName = m_playlist[m_playlistIndex].sourceName;
+    auto entries = currentLoopEntries();
+    if (m_playlistIndex >= 0 && m_playlistIndex < (int)entries.size())
+        s.sourceName = entries[m_playlistIndex].sourceName;
     double rem = std::chrono::duration<double>(
         m_playlistStepExpiry - std::chrono::steady_clock::now()).count();
     s.secondsLeft = rem < 0.0 ? 0.0 : rem;
@@ -425,6 +549,13 @@ void DskManager::buildStagingScene()
         stagingSrc = obs_source_get_ref(obs_scene_get_source(stagingScene));
     }
 
+    // Keep lock following visibility live, not just at build time: connect
+    // (idempotent — disconnect first) so toggling an item's eye icon in the
+    // staging scene immediately unlocks/relocks it.
+    signal_handler_t *stagingSh = obs_source_get_signal_handler(stagingSrc);
+    signal_handler_disconnect(stagingSh, "item_visible", cbStagingItemVisible, this);
+    signal_handler_connect(stagingSh, "item_visible", cbStagingItemVisible, this);
+
     // Nest the current program scene as a background reference, bottom-most,
     // added once. Never touched again so it doesn't fight with manual reorders.
     obs_source_t *programSrc = obs_frontend_get_current_scene();
@@ -444,17 +575,27 @@ void DskManager::buildStagingScene()
     }
 
     // Stage any live DSK item not already present, seeded at its live transform.
+    // Every pass (including refreshes) also syncs visibility + lock from live:
+    // only the item currently on air is visible and unlocked, so with several
+    // keyers stacked in the same spot you can only ever grab the active one.
     obs_scene_t *live = dskScene();
     if (live) {
         for (const auto &it : currentItems()) {
-            if (obs_scene_find_source(stagingScene, it.sourceName.c_str())) continue;
-
             obs_source_t *itemSrc = obs_get_source_by_name(it.sourceName.c_str());
             if (!itemSrc) continue;
 
             obs_sceneitem_t *liveItem   = obs_scene_find_source(live, it.sourceName.c_str());
-            obs_sceneitem_t *stagedItem = obs_scene_add(stagingScene, itemSrc);
-            if (stagedItem && liveItem) copyTransform(liveItem, stagedItem);
+            obs_sceneitem_t *stagedItem = obs_scene_find_source(stagingScene, it.sourceName.c_str());
+            if (!stagedItem) {
+                stagedItem = obs_scene_add(stagingScene, itemSrc);
+                if (stagedItem && liveItem) copyTransform(liveItem, stagedItem);
+            }
+
+            if (stagedItem) {
+                bool visible = liveItem && obs_sceneitem_visible(liveItem);
+                obs_sceneitem_set_visible(stagedItem, visible);
+                obs_sceneitem_set_locked(stagedItem, !visible);
+            }
 
             obs_source_release(itemSrc);
         }
@@ -600,6 +741,24 @@ void DskManager::cbItemRemove(void *data, calldata_t *cd)
     if (mgr->m_refreshCb) mgr->m_refreshCb();
 }
 
+void DskManager::cbStagingItemVisible(void *data, calldata_t *cd)
+{
+    auto             *mgr     = static_cast<DskManager *>(data);
+    obs_sceneitem_t  *item    = static_cast<obs_sceneitem_t *>(calldata_ptr(cd, "item"));
+    bool              visible = calldata_bool(cd, "visible");
+    if (!item) return;
+
+    obs_source_t *src  = obs_sceneitem_get_source(item);
+    const char   *name = src ? obs_source_get_name(src) : nullptr;
+    if (!name) return;
+
+    // Only DSK graphic items follow this rule — leave the (permanently locked)
+    // background reference layer alone.
+    if (!mgr->findItem(name)) return;
+
+    obs_sceneitem_set_locked(item, !visible);
+}
+
 void DskManager::cbSourceRename(void *data, calldata_t *cd)
 {
     auto       *mgr  = static_cast<DskManager *>(data);
@@ -696,6 +855,7 @@ void DskManager::loadCollectionSettings()
                     cfg.autoDuration = (uint32_t)obs_data_get_int(entry, "auto_dur");
                     const char *bc = obs_data_get_string(entry, "button_color");
                     if (bc) cfg.buttonColor = bc;
+                    cfg.alwaysOn = obs_data_get_bool(entry, "always_on");
                     m_transitions[name] = cfg;
                 }
                 obs_data_release(entry);
@@ -740,7 +900,14 @@ void DskManager::loadCollectionSettings()
             [](obs_scene_t *, obs_sceneitem_t *item, void *param) -> bool {
                 auto *mgr = static_cast<DskManager *>(param);
                 obs_source_t *s = obs_sceneitem_get_source(item);
-                if (s) { const char *n = obs_source_get_name(s); if (n) mgr->applyTransitions(n); }
+                if (s) {
+                    const char *n = obs_source_get_name(s);
+                    if (n) {
+                        mgr->applyTransitions(n);
+                        // Self-heal: an always-on item should never load hidden.
+                        if (mgr->isAlwaysOn(n)) obs_sceneitem_set_visible(item, true);
+                    }
+                }
                 return true;
             }, this);
     }
@@ -770,6 +937,7 @@ void DskManager::saveCollectionSettings()
         obs_data_set_string(entry, "hide_settings", cfg.hideSettings.c_str());
         obs_data_set_int(entry,    "auto_dur",      cfg.autoDuration);
         obs_data_set_string(entry, "button_color",  cfg.buttonColor.c_str());
+        obs_data_set_bool(entry,   "always_on",     cfg.alwaysOn);
         obs_data_array_push_back(items, entry);
         obs_data_release(entry);
     }

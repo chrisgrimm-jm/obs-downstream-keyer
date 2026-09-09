@@ -4,29 +4,23 @@
 #include <QListWidget>
 #include <QPushButton>
 #include <QSpinBox>
-#include <QComboBox>
-#include <vector>
 
 class DskPlaylistDialog : public QDialog {
     Q_OBJECT
 public:
     explicit DskPlaylistDialog(QWidget *parent = nullptr);
 private slots:
-    void onAdd();
-    void onRemove();
-    void onAccept();
+    void onSetDuration();
+    void onPlayNow();
     void onSelectionChanged();
 private:
     void buildUI();
     void populateList();
-    void updateSourceCombo();
-    void updateRemoveButton();
+    void updateButtons();
 
-    QListWidget  *m_list        = nullptr;
-    QComboBox    *m_sourceCombo = nullptr;
-    QSpinBox     *m_onSpin      = nullptr;
-    QSpinBox     *m_offSpin     = nullptr;
-    QPushButton  *m_addBtn      = nullptr;
-    QPushButton  *m_removeBtn   = nullptr;
-    std::vector<PlaylistEntry> m_entries;
+    QListWidget  *m_list           = nullptr;
+    QSpinBox     *m_onSpin         = nullptr;
+    QSpinBox     *m_offSpin        = nullptr;
+    QPushButton  *m_setDurationBtn = nullptr;
+    QPushButton  *m_playNowBtn     = nullptr;
 };

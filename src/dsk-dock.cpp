@@ -103,7 +103,7 @@ void DskDock::buildUI()
     connect(pushLiveBtn, &QPushButton::clicked, this, &DskDock::onPushLiveClicked);
     topBar->addWidget(pushLiveBtn);
 
-    auto *playlistBtn = new QPushButton("Playlist\xe2\x80\xa6");
+    auto *playlistBtn = new QPushButton("Sponsor Loop\xe2\x80\xa6");
     playlistBtn->setStyleSheet(kSettingsBtn);
     playlistBtn->setFixedHeight(22);
     connect(playlistBtn, &QPushButton::clicked, this, &DskDock::onPlaylistClicked);
@@ -171,6 +171,12 @@ void DskDock::buildListView(QVBoxLayout *layout)
         toggleBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         toggleBtn->setMinimumHeight(44);
         toggleBtn->setActive(item.visible);
+        // Not setEnabled(false): a disabled QWidget also stops receiving
+        // context-menu events, which would leave no way to un-pin it. The
+        // manager makes deactivate()/toggle() no-ops for always-on items, so
+        // clicking is already harmless — this is just a visual/tooltip cue.
+        if (mgr.isAlwaysOn(item.sourceName))
+            toggleBtn->setToolTip("Always On — right-click to change");
 
         // Apply saved button color
         const DskTransitionConfig *cfg =
@@ -229,6 +235,13 @@ void DskDock::buildListView(QVBoxLayout *layout)
                     onResetColorClicked(sname);
                 });
                 menu.addSeparator();
+                auto *alwaysOnAct = menu.addAction("Always On (no toggle button)");
+                alwaysOnAct->setCheckable(true);
+                alwaysOnAct->setChecked(DskManager::instance().isAlwaysOn(sname.toStdString()));
+                connect(alwaysOnAct, &QAction::toggled, this, [this, sname](bool checked) {
+                    onAlwaysOnToggled(sname, checked);
+                });
+                menu.addSeparator();
                 menu.addAction("Properties\xe2\x80\xa6", this, [sname]() {
                     obs_source_t *src = obs_get_source_by_name(sname.toUtf8().constData());
                     if (src) {
@@ -278,6 +291,8 @@ void DskDock::buildGridView(QVBoxLayout *layout)
         btn->setMinimumHeight(55);
         btn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         btn->setActive(item.visible);
+        if (mgr.isAlwaysOn(item.sourceName))
+            btn->setToolTip("Always On — right-click to change");
 
         // Apply saved button color
         const DskTransitionConfig *cfg = mgr.transitionConfig(item.sourceName);
@@ -345,6 +360,13 @@ void DskDock::onGridContextMenu(const QString &sourceName, const QPoint &globalP
     });
     menu.addAction("Reset to Default Color", this, [this, sourceName]() {
         onResetColorClicked(sourceName);
+    });
+    menu.addSeparator();
+    auto *alwaysOnAct = menu.addAction("Always On (no toggle button)");
+    alwaysOnAct->setCheckable(true);
+    alwaysOnAct->setChecked(DskManager::instance().isAlwaysOn(sourceName.toStdString()));
+    connect(alwaysOnAct, &QAction::toggled, this, [this, sourceName](bool checked) {
+        onAlwaysOnToggled(sourceName, checked);
     });
     menu.addSeparator();
     menu.addAction("Properties\xe2\x80\xa6", this, [sourceName]() {
@@ -507,6 +529,21 @@ void DskDock::onResetColorClicked(const QString &sourceName)
 
     DskTimerButton *btn = findTimerButton(sourceName);
     if (btn) btn->setButtonColor(QColor()); // invalid color → resets to default dark gray
+}
+
+void DskDock::onAlwaysOnToggled(const QString &sourceName, bool alwaysOn)
+{
+    DskManager::instance().setAlwaysOn(sourceName.toStdString(), alwaysOn);
+    DskManager::instance().saveSettings();
+
+    // Not a direct refresh() call: this runs from a QAction inside a QMenu
+    // that's still executing (menu.exec() hasn't returned yet), spawned from
+    // this very button's context-menu handler. refresh() does a synchronous
+    // `delete m_itemContainer`, which would destroy that button out from
+    // under Qt's still-active event-handling call stack — a use-after-free
+    // that doesn't reliably crash until well after the fact. Queue it instead
+    // so it runs once the menu has fully closed and unwound.
+    QMetaObject::invokeMethod(this, "refresh", Qt::QueuedConnection);
 }
 
 void DskDock::onRenameClicked(const QString &sourceName)
