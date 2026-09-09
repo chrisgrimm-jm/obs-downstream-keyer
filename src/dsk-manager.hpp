@@ -108,6 +108,13 @@ public:
     void stopPlaylist();
     bool isPlaylistRunning() const { return m_playlistRunning; }
 
+    // Immediately shows the given playlist entry, interrupting whatever the
+    // loop currently has up (starting it if it wasn't running). The rotation
+    // continues normally from this entry afterward. Lets an operator punch a
+    // specific sponsor to air — e.g. for their live ad read — using the same
+    // source the loop already cycles, no duplicate asset needed.
+    void playNow(const std::string &sourceName);
+
     struct PlaylistStatus {
         bool        running     = false;
         bool        inGap       = false;

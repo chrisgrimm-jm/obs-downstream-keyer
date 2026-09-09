@@ -78,11 +78,23 @@ void DskPlaylistDialog::buildUI()
 
     root->addWidget(formWidget);
 
+    auto *rowBtns = new QHBoxLayout();
+    rowBtns->setContentsMargins(0, 0, 0, 0);
+
     m_removeBtn = new QPushButton("Remove Selected");
     m_removeBtn->setStyleSheet(kDlgBtn);
     m_removeBtn->setEnabled(false);
     connect(m_removeBtn, &QPushButton::clicked, this, &DskPlaylistDialog::onRemove);
-    root->addWidget(m_removeBtn);
+    rowBtns->addWidget(m_removeBtn);
+
+    m_playNowBtn = new QPushButton("\xe2\x96\xb6 Play Now");
+    m_playNowBtn->setStyleSheet(kDlgBtn);
+    m_playNowBtn->setEnabled(false);
+    m_playNowBtn->setToolTip("Punch the selected sponsor to air immediately; the loop resumes from here afterward");
+    connect(m_playNowBtn, &QPushButton::clicked, this, &DskPlaylistDialog::onPlayNow);
+    rowBtns->addWidget(m_playNowBtn);
+
+    root->addLayout(rowBtns);
 
     auto *btns = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
     connect(btns, &QDialogButtonBox::accepted, this, &DskPlaylistDialog::onAccept);
@@ -127,7 +139,9 @@ void DskPlaylistDialog::updateSourceCombo()
 
 void DskPlaylistDialog::updateRemoveButton()
 {
-    m_removeBtn->setEnabled(m_list->currentRow() >= 0);
+    bool hasSelection = m_list->currentRow() >= 0;
+    m_removeBtn->setEnabled(hasSelection);
+    m_playNowBtn->setEnabled(hasSelection);
 }
 
 void DskPlaylistDialog::onSelectionChanged()
@@ -157,7 +171,7 @@ void DskPlaylistDialog::onRemove()
     updateRemoveButton();
 }
 
-void DskPlaylistDialog::onAccept()
+void DskPlaylistDialog::commitEntries()
 {
     // Sync m_entries order from the list widget (user may have drag-reordered)
     std::vector<PlaylistEntry> ordered;
@@ -171,5 +185,22 @@ void DskPlaylistDialog::onAccept()
     }
     DskManager::instance().setPlaylist(std::move(ordered));
     DskManager::instance().saveSettings();
+}
+
+void DskPlaylistDialog::onAccept()
+{
+    commitEntries();
     accept();
+}
+
+void DskPlaylistDialog::onPlayNow()
+{
+    int row = m_list->currentRow();
+    if (row < 0 || row >= m_list->count()) return;
+    std::string name = m_list->item(row)->data(Qt::UserRole).toString().toStdString();
+
+    // Commit first so Play Now works even on an entry just added/reordered
+    // in this dialog, without requiring OK to be clicked first.
+    commitEntries();
+    DskManager::instance().playNow(name);
 }

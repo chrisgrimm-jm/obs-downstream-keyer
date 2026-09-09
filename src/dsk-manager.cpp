@@ -144,16 +144,12 @@ std::vector<std::string> DskManager::playlistEligibleSourceNames() const
         const char *name = src ? obs_source_get_name(src) : nullptr;
         if (name && *name) out->push_back(name);
 
-        bool isGroup = obs_sceneitem_is_group(item);
-        blog(LOG_INFO, "[dsk-debug] top-level '%s' is_group=%d", name ? name : "(null)", isGroup);
-
-        if (isGroup) {
+        if (obs_sceneitem_is_group(item)) {
             obs_sceneitem_group_enum_items(item,
                 [](obs_scene_t *, obs_sceneitem_t *child, void *p) -> bool {
                     auto *out2 = static_cast<std::vector<std::string> *>(p);
                     obs_source_t *csrc = obs_sceneitem_get_source(child);
                     const char *cname = csrc ? obs_source_get_name(csrc) : nullptr;
-                    blog(LOG_INFO, "[dsk-debug]   child '%s'", cname ? cname : "(null)");
                     if (cname && *cname) out2->push_back(cname);
                     return true;
                 }, param);
@@ -162,7 +158,6 @@ std::vector<std::string> DskManager::playlistEligibleSourceNames() const
     };
 
     obs_scene_enum_items(scene, addName, &names);
-    blog(LOG_INFO, "[dsk-debug] playlistEligibleSourceNames total=%d", (int)names.size());
     return names;
 }
 
@@ -331,6 +326,29 @@ void DskManager::stopPlaylist()
     }
     m_playlistRunning = false;
     if (m_refreshCb) m_refreshCb();
+}
+
+void DskManager::playNow(const std::string &sourceName)
+{
+    int idx = -1;
+    for (size_t i = 0; i < m_playlist.size(); i++) {
+        if (m_playlist[i].sourceName == sourceName) { idx = (int)i; break; }
+    }
+    if (idx < 0) return;
+
+    // Same teardown as stopPlaylist() for whatever's currently up, but jump
+    // straight into the chosen entry instead of stopping — the rotation
+    // continues normally from here afterward.
+    if (m_playlistRunning && !m_playlistInGap && m_playlistIndex >= 0
+        && m_playlistIndex < (int)m_playlist.size()) {
+        deactivate(m_playlist[m_playlistIndex].sourceName);
+    }
+    ++m_playlistSeq;
+
+    m_playlistRunning = true;
+    m_playlistInGap   = false;
+    m_playlistIndex   = idx;
+    schedulePlaylistStep();
 }
 
 void DskManager::schedulePlaylistStep()
