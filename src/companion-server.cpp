@@ -21,12 +21,16 @@ bool CompanionServer::start(quint16 port)
 {
     stop();
     m_port = port;
-    if (!m_server->listen(QHostAddress::LocalHost, port)) {
+    // Bound to all interfaces (not just localhost) so Companion can reach it
+    // from a separate machine on the network. This API has no
+    // authentication, so anything able to reach this port on the LAN can
+    // control the DSK — acceptable on a private, trusted studio network.
+    if (!m_server->listen(QHostAddress::AnyIPv4, port)) {
         blog(LOG_WARNING, "[dsk] HTTP server failed to bind port %d: %s",
              port, m_server->errorString().toUtf8().constData());
         return false;
     }
-    blog(LOG_INFO, "[dsk] HTTP server listening on 127.0.0.1:%d", port);
+    blog(LOG_INFO, "[dsk] HTTP server listening on 0.0.0.0:%d", port);
     return true;
 }
 
